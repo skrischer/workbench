@@ -222,3 +222,12 @@ export interface RunResult {
 
 // Re-export event types
 export type { EventMap, EventListener, Unsubscribe, TokenUsage, StepTokenUsage } from './events.js';
+// Memory System Types
+export type {
+  MemoryType,
+  MemorySource,
+  MemoryEntry,
+  MemoryQuery,
+  MemoryResult,
+  EmbeddingConfig,
+} from './memory.js';
