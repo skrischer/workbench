@@ -1,6 +1,14 @@
 // src/types/index.ts — Shared Type Definitions for Workbench
 
-/** Agent configuration */
+/** Agent runtime configuration (loaded from file or defaults) */
+export interface AgentConfig {
+  model: string;
+  systemPrompt: string;
+  tools?: string[]; // Tool name whitelist
+  maxSteps: number;
+}
+
+/** Agent instance (runtime entity with ID) */
 export interface Agent {
   id: string;
   name: string;
