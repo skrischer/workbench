@@ -30,6 +30,8 @@ export interface EventMap {
   'plan:step:start': { planId: string; stepId: string; stepIndex: number; stepTitle: string };
   'plan:step:end': { planId: string; stepId: string; stepIndex: number; status: StepStatus; durationMs: number };
   'plan:end': { planId: string; status: PlanStatus; totalSteps: number; completedSteps: number };
+  'message:sent': { from: string; to: string; type: string; payload: unknown };
+  'message:received': { agentId: string; from: string; to: string; type: string; payload: unknown };
 }
 
 /** Event listener function */
