@@ -210,3 +210,12 @@ export interface LLMResponse {
   stop_reason: 'end_turn' | 'max_tokens' | 'stop_sequence' | 'tool_use';
   usage: LLMUsage;
 }
+
+/** Result of an agent run */
+export interface RunResult {
+  sessionId: string;
+  steps: number;
+  finalResponse: string;
+  tokenUsage: LLMUsage;
+  status: 'completed' | 'max_steps_reached' | 'failed';
+}
