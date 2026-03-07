@@ -37,7 +37,8 @@
     "@types/node": "^25.3.5",
     "@types/ws": "^8.18.1",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "ws": "^8.19.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
