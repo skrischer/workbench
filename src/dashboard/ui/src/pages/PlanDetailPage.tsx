@@ -5,7 +5,6 @@ import { Link, useParams } from 'react-router-dom';
 import { useApi } from '../hooks/useApi.js';
 import { useWebSocket } from '../hooks/useWebSocket.js';
 import { StepProgress } from '../components/StepProgress.js';
-import { DiffViewer } from '../components/DiffViewer.js';
 import type { Plan, Step, StepStatus } from '../../../../types/task.js';
 
 /**
@@ -185,8 +184,8 @@ function StepCard({ step, isLast }: { step: Step; isLast: boolean }) {
                 {/* Token usage */}
                 {step.result.tokenUsage && (
                   <div className="text-xs text-gray-500">
-                    Tokens: {step.result.tokenUsage.inputTokens.toLocaleString()} in /{' '}
-                    {step.result.tokenUsage.outputTokens.toLocaleString()} out
+                    Tokens: {step.result.tokenUsage.totalInputTokens.toLocaleString()} in /{' '}
+                    {step.result.tokenUsage.totalOutputTokens.toLocaleString()} out
                   </div>
                 )}
               </>
@@ -359,8 +358,8 @@ export function PlanDetailPage() {
           <div className="mt-8 bg-white rounded-lg shadow p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Total Token Usage</h3>
             <div className="text-sm text-gray-600 space-y-1">
-              <div>Input: {plan.metadata.totalTokenUsage.inputTokens.toLocaleString()}</div>
-              <div>Output: {plan.metadata.totalTokenUsage.outputTokens.toLocaleString()}</div>
+              <div>Input: {plan.metadata.totalTokenUsage.totalInputTokens.toLocaleString()}</div>
+              <div>Output: {plan.metadata.totalTokenUsage.totalOutputTokens.toLocaleString()}</div>
               <div className="font-semibold">
                 Total: {plan.metadata.totalTokenUsage.totalTokens.toLocaleString()}
               </div>

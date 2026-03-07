@@ -163,7 +163,7 @@ describe('Plan Viewer Components', () => {
             status: 'completed',
             result: {
               output: 'Step completed successfully',
-              tokenUsage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+              tokenUsage: { totalInputTokens: 100, totalOutputTokens: 50, totalTokens: 150, totalCacheReadTokens: 0, totalCacheWriteTokens: 0, stepCount: 1 },
               filesModified: ['src/file1.ts'],
               durationMs: 1500,
             },
