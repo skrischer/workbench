@@ -9,12 +9,24 @@ import { ListFilesTool } from './list-files.js';
 import { GrepTool } from './grep.js';
 import { SearchCodeTool } from './search-code.js';
 import { ProjectSummaryTool } from './project-summary.js';
+import { RememberTool } from './remember.js';
+import { RecallTool } from './recall.js';
+import type { LanceDBMemoryStore } from '../memory/lancedb-store.js';
+
+/**
+ * Options for creating default tools
+ */
+export interface DefaultToolsOptions {
+  /** Optional memory store for remember/recall tools */
+  memoryStore?: LanceDBMemoryStore;
+}
 
 /**
  * Creates a ToolRegistry with all default core tools registered.
- * @returns ToolRegistry with all 8 default tools (file ops, exec, codebase intelligence)
+ * @param options - Optional configuration for tools
+ * @returns ToolRegistry with all default tools (file ops, exec, codebase intelligence, memory if store provided)
  */
-export function createDefaultTools(): ToolRegistry {
+export function createDefaultTools(options?: DefaultToolsOptions): ToolRegistry {
   const registry = new ToolRegistry();
   
   // File operation tools
@@ -30,6 +42,12 @@ export function createDefaultTools(): ToolRegistry {
   registry.register(new GrepTool());
   registry.register(new SearchCodeTool());
   registry.register(new ProjectSummaryTool());
+  
+  // Memory tools (optional, only if store is provided)
+  if (options?.memoryStore) {
+    registry.register(new RememberTool(options.memoryStore));
+    registry.register(new RecallTool(options.memoryStore));
+  }
   
   return registry;
 }
