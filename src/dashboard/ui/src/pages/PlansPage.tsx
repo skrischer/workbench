@@ -34,7 +34,7 @@ function getStatusBadgeClass(status: Plan['status']): string {
  * - Link to detail page
  */
 export function PlansPage() {
-  const { data: plans, loading, error } = useApi<Plan[]>('/api/plans');
+  const { data: plans, loading, error } = useApi<Plan[]>('/plans');
 
   if (loading) {
     return (

@@ -225,7 +225,7 @@ function StepCard({ step, isLast }: { step: Step; isLast: boolean }) {
  */
 export function PlanDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { data: initialPlan, loading, error, refetch } = useApi<Plan>(`/api/plans/${id}`);
+  const { data: initialPlan, loading, error, refetch } = useApi<Plan>(`/plans/${id}`);
   const [plan, setPlan] = useState<Plan | null>(null);
   const { subscribe } = useWebSocket();
 

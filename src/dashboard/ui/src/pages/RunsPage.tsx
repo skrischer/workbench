@@ -52,7 +52,7 @@ function formatDate(isoDate: string): string {
  * Runs list page showing all agent executions
  */
 export default function RunsPage() {
-  const { data: runs, loading, error, refetch } = useApi<RunMetadata[]>('/api/runs');
+  const { data: runs, loading, error, refetch } = useApi<RunMetadata[]>('/runs');
 
   return (
     <div className="min-h-screen bg-gray-50">
