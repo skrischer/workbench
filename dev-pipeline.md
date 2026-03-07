@@ -377,7 +377,7 @@ Jedes Projekt braucht diese Datei im Repo-Root:
 **Szenario:** Dashboard-UI-Rewrite mit Svelte 5
 
 ```bash
-REPO=/root/.openclaw/projects/ai-agent
+REPO=/root/.openclaw/projects/workbench
 
 # Epic erstellen
 project-task.sh $REPO epic ui-rewrite
