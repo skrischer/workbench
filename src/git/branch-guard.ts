@@ -11,6 +11,8 @@ export interface BranchGuardConfig {
   enabled?: boolean;
   /** List of protected branch patterns (supports glob with *) */
   protectedBranches?: string[];
+  /** Working directory for git operations (optional) */
+  cwd?: string;
 }
 
 /**
@@ -105,6 +107,7 @@ export function wrapTool(tool: Tool, config: BranchGuardConfig = {}): Tool {
   const {
     enabled = true,
     protectedBranches = DEFAULT_PROTECTED_BRANCHES,
+    cwd,
   } = config;
   
   // If guards are disabled, return original tool
@@ -118,8 +121,8 @@ export function wrapTool(tool: Tool, config: BranchGuardConfig = {}): Tool {
     inputSchema: tool.inputSchema,
     
     async execute(input: Record<string, unknown>): Promise<ToolResult> {
-      // Check current branch
-      const branchResult = getCurrentBranch();
+      // Check current branch (use cwd if provided)
+      const branchResult = getCurrentBranch(cwd);
       
       if (!branchResult.success || !branchResult.data) {
         return {

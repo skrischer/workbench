@@ -131,11 +131,12 @@ export class AgentLoop {
       baseBranch,
     });
 
-    // Wrap tools with branch guards
+    // Wrap tools with branch guards (pass worktree path as cwd)
     const wrappedTools = tools.map((tool) =>
       wrapTool(tool, {
         enabled: true,
         protectedBranches: this.config.protectedBranches,
+        cwd: worktree.worktreePath,
       })
     );
 
