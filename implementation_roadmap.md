@@ -1,192 +1,289 @@
-# AI Dev OS -- Implementation Roadmap
+# Workbench — Implementation Roadmap
 
-## Phase 1 -- Minimal Agent Runtime
+> Ein AI-gestütztes Entwicklungswerkzeug als CLI-Tool. Single-User, Self-Hosted auf VPS mit Tailscale-Zugang.
 
-Ziel: funktionierender Coding-Agent.
+## Überblick
 
-### Komponenten
+Workbench ist ein lokales AI Dev OS: ein Agent-System, das Code lesen, schreiben, ausführen und iterativ verbessern kann — gesteuert über eine CLI (`workbench`). Die Architektur ist event-driven, der Storage JSON-basiert (mit SQLite-Migrationspfad), die Runtime Node.js 22+ (siehe `tech_stack.md`).
 
--   CLI Entry
--   Agent Runtime Loop
--   Tool System
--   Session Storage
--   Anthropic Client — OAuth 2.0 PKCE gegen Claude Max Plan, siehe `anthropic-oauth-provider.md`
+Die Implementierung gliedert sich in **10 Phasen (0–9)**, organisiert in **13 Epics**. Phasen mit unabhängigen Abhängigkeiten können parallel entwickelt werden.
 
-### Minimaler Toolset
+---
 
--   read_file
--   write_file
--   edit_file
--   exec
+## Phase 0 — Project Bootstrap
 
-### Beispielstruktur
+**Ziel:** Projekt-Grundgerüst mit Build-Pipeline, Typen und Entwicklungsinfrastruktur.
 
-    agency/
-      agent/
-      tools/
-      runtime/
-      llm/
-      cli/
+**Epic: `0-bootstrap`**
 
-### Erfolgskriterium
+| Komponente | Details |
+|---|---|
+| Projekt-Scaffold | TypeScript, ESM, Vitest, Commander.js |
+| Verzeichnisstruktur | `src/{tools,runtime,llm,cli,types,storage}/` |
+| Shared Types | Interfaces: `Agent`, `Tool`, `Session`, `Run`, `Task`, `Plan`, `Step` |
+| Dev-Pipeline | `.openclaw-dev.json` für Integration (siehe `dev-pipeline.md`) |
+| Branch-Setup | `develop` Branch erstellen |
 
-    agency run "create a hello world server"
+**Abhängigkeiten:** Keine — Startpunkt.
 
-Der Agent kann:
+**Erfolgskriterium:** Projekt kompiliert, Tests laufen, Verzeichnisstruktur steht.
 
--   Dateien erstellen
--   Code schreiben
--   Code ausführen
--   Fehler korrigieren
+---
 
-------------------------------------------------------------------------
+## Phase 1 — Minimal Agent Runtime
 
-## Phase 2 -- Observability Layer (sehr hohe Priorität)
+**Ziel:** Ein funktionsfähiger Agent, der über die CLI Prompts entgegennimmt, Tools nutzt und iterativ arbeitet.
 
-Agent Systeme ohne Transparenz werden schnell unbrauchbar.
+Phase 1 besteht aus drei Tracks. Track A und B sind voneinander unabhängig und können parallel entwickelt werden. Track C setzt beide voraus.
 
-Implementieren:
+### Track A: Tool System
 
--   Run Logs
--   Tool Call Logs
--   Token Usage Tracking
+**Epic: `1A-tools`** · Parallel zu Track B
 
-### Run Struktur
+- `BaseTool` abstrakte Klasse + `ToolRegistry`
+- 4 Core Tools: `read_file`, `write_file`, `edit_file`, `exec`
+- Input-Validierung via JSON Schema
+- Strukturiertes Error-Handling (Tool-Fehler ≠ Runtime-Fehler)
 
-    runs/
-      run_id/
-        messages.json
-        tool_calls.json
+**Abhängigkeit:** Phase 0
 
-------------------------------------------------------------------------
+### Track B: Anthropic OAuth Client
 
-## Phase 3 -- Codebase Intelligence (hoch)
+**Epic: `1B-oauth`** · Parallel zu Track A
 
-Der Agent muss Projekte navigieren können.
+- Token-Storage (`~/.workbench/tokens.json`) mit File-Lock
+- Automatischer Token-Refresh (5-Minuten-Puffer vor Ablauf)
+- Messages API Client mit Tool-Use Support
+- Manueller Token-Paste: User kopiert Tokens aus dem Browser-OAuth-Flow
+- Kein PKCE im Code — der OAuth-Flow läuft serverseitig (siehe `anthropic-oauth-provider.md`)
 
-Neue Tools:
+**Abhängigkeit:** Phase 0
 
--   search_code
--   list_files
--   grep
--   project_summary
+### Track C: Agent Runtime + CLI
 
-Optional:
+**Epic: `1C-runtime`**
 
--   code_index
+- Session-Storage (JSON, `~/.workbench/sessions/`)
+- Agent-Config: `model`, `system_prompt`, `tools`, `max_steps`
+- Agent Runtime Loop: deterministisch, sequentiell, vollständige Historie
+- CLI Entry Points: `workbench run "<prompt>"`, `workbench sessions`
 
-------------------------------------------------------------------------
+**Abhängigkeiten:** Track A + Track B
 
-## Phase 4 -- Task System (hoch)
+**Erfolgskriterium Phase 1:**
+```
+workbench run "create a hello world server"
+```
+Der Agent erstellt Dateien, schreibt Code, führt ihn aus und korrigiert Fehler selbstständig.
 
-Komplexe Aufgaben strukturieren.
+---
 
-Neue Primitives:
+## Phase 2 — Observability Layer
 
--   Task
--   Plan
--   Step
+**Ziel:** Transparenz über alles, was im System passiert — als Grundlage für Dashboard und Debugging.
 
-Fähigkeiten:
+**Epic: `2-observability`**
 
--   Planung
--   Fortschrittskontrolle
--   Wiederaufnahme
+- **Event Bus (Pub/Sub):** Zentrales Rückgrat für alle System-Events. Bridged in Phase 5 zu WebSocket.
+- **Token Usage Tracking:** Pro Run + aggregierte Statistiken
+- **Structured Logger:** JSON-Format, Severity Levels
+- **Run Logger:** Vollständige Tool Call History mit Laufzeiten und Token-Verbrauch
 
-------------------------------------------------------------------------
+**Abhängigkeit:** Phase 1C
 
-## Phase 5 -- Dev Dashboard (hoch)
+---
 
-Weboberfläche für Systemkontrolle.
+## Phase 3 — Codebase Intelligence
 
-Funktionen:
+**Ziel:** Der Agent versteht die Struktur eines Projekts und kann gezielt darin suchen.
 
--   Session Viewer
--   Tool Call Viewer
--   Diff Viewer
--   Run Controls
+**Epic: `3-codebase`** · Kann parallel zu Phase 2 entwickelt werden
 
-------------------------------------------------------------------------
+- Shared Ignore-Utility (`.gitignore` + `.workbenchignore`)
+- Neue Tools:
+  - `search_code` — Regex-basierte Codesuche
+  - `grep` — Mustersuche in Dateien
+  - `list_files` — Verzeichnisbaum mit Filterung
+  - `project_summary` — Strukturübersicht eines Projekts
+- Alle Tools respektieren Ignore-Patterns
 
-## Phase 6 -- Multi-Agent Support (mittel)
+**Abhängigkeit:** Phase 1A (Tool-System)
 
-Erweiterung um mehrere Agenten.
+---
 
-Neue Tools:
+## Phase 4 — Task System
 
--   spawn_agent
--   send_message
--   list_agents
+**Ziel:** Strukturierte Aufgabenplanung — der Agent zerlegt komplexe Aufgaben in ausführbare Schritte.
 
-Typisches Setup:
+**Epic: `4-tasks`**
 
-Planner Agent Worker Agent
+- `Task`/`Plan`/`Step` Types (JSON-basiert, deterministisch, kein DAG)
+- Plan-Storage (JSON Files, `~/.workbench/plans/`)
+- **Plan-Generator:** LLM erstellt strukturierten Plan aus Aufgabenbeschreibung
+- **Plan-Executor:** Lineare Step-Ausführung mit Fortschrittsanzeige, Pause/Resume
+- CLI: `workbench plan "<aufgabe>"`, `workbench run plan-<id>`
 
-------------------------------------------------------------------------
+**Abhängigkeiten:** Phase 1C + Phase 2
 
-## Phase 7 -- Memory System (mittel)
+---
 
-Langfristiges Projektwissen.
+## Phase 5 — Dev Dashboard
 
-Typen:
+**Ziel:** Web-basierte Oberfläche zur Überwachung und Steuerung von Agent-Runs in Echtzeit.
 
--   session memory
--   project memory
--   knowledge memory
+Phase 5 ist strikt sequentiell: Backend zuerst, dann Frontend.
 
-Implementierung:
+### 5A: Backend (Fastify + WebSocket)
 
--   vector database
--   summarised session history
--   documentation memory
+**Epic: `5A-dashboard-backend`**
 
-------------------------------------------------------------------------
+- REST API: Sessions, Runs, Plans (read-only + Controls)
+- WebSocket Server: Event Bus Bridge für Live-Events
+- Run Controls: Start, Pause, Resume, Cancel
 
-## Phase 8 -- Safety & Self‑Modification (hoch)
+**Abhängigkeiten:** Phase 2 + Phase 4
 
-Wenn Agenten das System verändern dürfen:
+### 5B: Frontend (React SPA)
 
--   git enforced workflow
--   diff review
--   rollback
+**Epic: `5B-dashboard-frontend`**
 
-Siehe `dev-pipeline.md` für den vollständigen Worktree/Epic-Branch-Flow mit DoD-Enforcement und Coder/Reviewer-Orchestrierung.
+- React + TypeScript + TailwindCSS
+- WebSocket Client + Event Hooks
+- Session/Run Viewer, Tool Call Viewer, Diff Viewer
+- Kein Mock-Data — das Backend muss existieren
 
-------------------------------------------------------------------------
+**Abhängigkeit:** Phase 5A
 
-## Phase 9 -- Autonomous Dev Workflows (mittel)
+---
 
-Automatisierte Entwicklungsprozesse.
+## Phase 6 — Multi-Agent Support
 
-Beispiele:
+**Ziel:** Mehrere spezialisierte Agents, die koordiniert zusammenarbeiten.
 
--   test fixing agent
--   code review agent
--   refactor agent
--   documentation agent
+**Epic: `6-multi-agent`**
 
-------------------------------------------------------------------------
+- **Agent-Registry:** Mehrere Agent-Konfigurationen verwalten
+- **Message-Passing:** In-Process Async Communication zwischen Agents
+- **Orchestrator-Pattern:** Planner delegiert an spezialisierte Worker
+- Neue Tools: `spawn_agent`, `send_message`, `list_agents`
+- CLI: `workbench agents`, Multi-Agent-Runs
+
+**Abhängigkeiten:** Phase 1C + Phase 4
+
+---
+
+## Phase 7 — Memory System
+
+**Ziel:** Persistentes Wissen über Sessions hinweg — der Agent lernt aus vergangener Arbeit.
+
+**Epic: `7-memory`**
+
+- Memory Types: `session`, `project`, `knowledge`
+- **LanceDB** embedded als Vector-Store
+- Embedding-Provider (lokales Modell empfohlen — Offline-fähig, keine API-Kosten)
+- **Session-Summarizer:** Automatische Zusammenfassungen nach jedem Run
+- Neue Tools: `memory_store`, `memory_search`
+
+**Abhängigkeit:** Phase 1C
+
+---
+
+## Phase 8 — Git Safety & Dev Workflow
+
+**Ziel:** Sichere, isolierte Code-Änderungen mit automatischem Git-Workflow — inspiriert vom bewährten dev-pipeline Skill (siehe `dev-pipeline.md`).
+
+**Epic: `8-git-safety`**
+
+- **Git-Utilities:** Branch, Worktree, Commit, Diff als strukturierte API
+- **Worktree-Manager:** Isolierter Worktree pro Run (`~/.workbench/worktrees/<run-id>/`)
+- **Branch-Guards:** Tool-Level Protection — `write_file`/`edit_file` nur auf `agent/*` Branches
+- **Auto-Commit:** Nach jedem dateiändernden Tool-Call (parseable Commit Messages)
+- **Step-Level-Rollback** via `git revert`
+- **DoD-Runner:** Definition-of-Done Checks aus Projekt-Config vor Run-Completion
+- **PR-Workflow:** Automatisierte PR-Erstellung via `gh`, Diff-Summary als Body
+
+**Abhängigkeit:** Phase 1A
+
+---
+
+## Phase 9 — Autonomous Dev Workflows
+
+**Ziel:** Vorgefertigte, spezialisierte Workflows für häufige Entwicklungsaufgaben.
+
+**Epic: `9-workflows`**
+
+- **Workflow-Abstraktion:** Benannte Agent-Konfigurationen mit System-Prompt + Tool-Whitelist
+- **Workflow-Registry:** Verwaltung und Erweiterung von Workflows
+- 4 vorgefertigte Workflows:
+  - `workbench fix-tests` — Test-Fixer (analysiert Fehler, fixt Source bevorzugt)
+  - `workbench review <branch>` — Code-Reviewer (strukturiertes Markdown-Feedback)
+  - `workbench refactor <target>` — Refactoring-Agent (mit Dry-Run-Modus)
+  - `workbench docs` — Dokumentations-Agent (README, JSDoc, API, Changelog)
+- Workflow-Runner + CLI-Integration
+
+**Abhängigkeiten:** Phase 6 + Phase 8
+
+---
 
 ## Zielzustand
 
-    AI Dev OS
-     ├ CLI
-     ├ Agent Runtime
-     ├ Tool System
-     ├ Dev Dashboard
-     ├ Task System
-     └ Project Memory
+```
+Workbench — AI Dev OS
+├── CLI (Commander.js)
+│   ├── workbench run "<prompt>"
+│   ├── workbench plan "<aufgabe>"
+│   ├── workbench fix-tests / review / refactor / docs
+│   └── workbench agents / sessions
+├── Agent Runtime
+│   ├── Deterministischer Loop
+│   ├── Multi-Agent (Orchestrator/Worker)
+│   └── Git-isolierte Worktrees
+├── Tool System
+│   ├── Core: read/write/edit/exec
+│   ├── Codebase: search/grep/list/summary
+│   ├── Agent: spawn/send/list
+│   └── Memory: store/search
+├── Dev Dashboard (React SPA)
+│   ├── Session/Run Viewer
+│   ├── Tool Call + Diff Viewer
+│   └── Live via WebSocket
+├── Task System (JSON Plans)
+├── Memory (LanceDB)
+└── Observability (Event Bus → Logs → Dashboard)
+```
 
-Typischer Workflow:
+**Typischer Workflow:**
+```
+workbench plan "add authentication"
+workbench run plan-42
+```
+Der Agent erstellt einen Plan, implementiert Code in einem isolierten Worktree, führt Tests aus, prüft die Definition-of-Done und erstellt einen PR. Der Entwickler reviewed und entscheidet.
 
-    agency plan "add authentication"
-    agency run plan-42
+---
 
-Der Agent:
+## Dependency Graph
 
-1.  erstellt Plan
-2.  implementiert Code
-3.  führt Tests aus
-4.  präsentiert Änderungen
+```
+Phase 0 (Bootstrap)
+├── Phase 1A (Tools) ──────────────┬── Phase 3 (Codebase Intel)
+│                                  ├── Phase 8 (Git Safety) ──┐
+├── Phase 1B (OAuth) ──┐           │                          │
+│                      ├── Phase 1C (Runtime+CLI)             │
+│                      │   ├── Phase 2 (Observability)        │
+│                      │   │   ├── Phase 4 (Tasks) ───────┐   │
+│                      │   │   │   ├── Phase 5A (Dash BE)  │   │
+│                      │   │   │   │   └── Phase 5B (FE)   │   │
+│                      │   │   │   ├── Phase 6 (Multi-Ag) ─┼───┤
+│                      │   ├── Phase 7 (Memory)            │   │
+│                      │   │                               │   │
+│                      │   └───────────────────────────────>Phase 9 (Workflows)
+```
 
-Der Entwickler überprüft und entscheidet.
+---
+
+## Referenzen
+
+- Technologie-Entscheidungen: siehe `tech_stack.md`
+- Architektur-Prinzipien: siehe `architecture_principles.md`
+- OAuth-Flow: siehe `anthropic-oauth-provider.md`
+- Git-Workflow: siehe `dev-pipeline.md`
