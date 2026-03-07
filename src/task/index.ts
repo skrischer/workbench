@@ -2,3 +2,6 @@
 
 export type { Task, Plan, Step, PlanStatus, StepStatus, StepResult } from '../types/task.js';
 export { validatePlan, validateStep } from './validation.js';
+export { PlanGenerator, generatePlan } from './plan-generator.js';
+export type { PlanGeneratorConfig } from './plan-generator.js';
+export { PLAN_GENERATION_SYSTEM_PROMPT, createPlanGenerationUserPrompt } from './plan-prompt.js';
