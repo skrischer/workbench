@@ -1,0 +1,12 @@
+{
+  "project": "workbench",
+  "repo": "/root/.openclaw/projects/workbench",
+  "defaultBranch": "main",
+  "developBranch": "develop",
+  "epicBranchPrefix": "epic/",
+  "taskBranchPrefix": "task/",
+  "dod": {
+    "typescript": "npx tsc --noEmit",
+    "tests": "npm test"
+  }
+}
