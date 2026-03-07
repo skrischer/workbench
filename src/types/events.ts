@@ -35,6 +35,8 @@ export interface EventMap {
   'agent:terminated': { id: string; role: string };
   'message:sent': { from: string; to: string; type: string; payload: unknown };
   'message:received': { agentId: string; from: string; to: string; type: string; payload: unknown };
+  'workflow:start': { workflowId: string; params: Record<string, unknown> };
+  'workflow:end': { workflowId: string; status: 'completed' | 'failed' | 'partial'; durationMs: number };
 }
 
 /** Event listener function */

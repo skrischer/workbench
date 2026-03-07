@@ -5,6 +5,7 @@ import { createPlanCommand } from './plan-command.js';
 import { createRunPlanCommand } from './run-plan-command.js';
 import { createPlansCommand } from './plans-command.js';
 import { createDashboardCommand } from './dashboard-command.js';
+import { createWorkflowCommands } from './workflow-commands.js';
 
 const program = new Command();
 
@@ -38,5 +39,10 @@ program.addCommand(createPlansCommand());
 
 // Register dashboard command
 program.addCommand(createDashboardCommand());
+
+// Register workflow commands
+for (const cmd of createWorkflowCommands()) {
+  program.addCommand(cmd);
+}
 
 program.parse();
