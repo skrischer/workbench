@@ -4,6 +4,7 @@ import { runCommand } from './run-command.js';
 import { createPlanCommand } from './plan-command.js';
 import { createRunPlanCommand } from './run-plan-command.js';
 import { createPlansCommand } from './plans-command.js';
+import { createDashboardCommand } from './dashboard-command.js';
 
 const program = new Command();
 
@@ -34,5 +35,8 @@ program
 program.addCommand(createPlanCommand());
 program.addCommand(createRunPlanCommand());
 program.addCommand(createPlansCommand());
+
+// Register dashboard command
+program.addCommand(createDashboardCommand());
 
 program.parse();
