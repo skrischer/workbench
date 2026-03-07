@@ -27,3 +27,9 @@ export {
   DEFAULT_PROTECTED_BRANCHES,
   type BranchGuardConfig,
 } from './branch-guard.js';
+
+export {
+  AutoCommitter,
+  type CommitMetadata,
+  type CommitInfo,
+} from './auto-commit.js';
