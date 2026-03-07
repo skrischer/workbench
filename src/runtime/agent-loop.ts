@@ -1,298 +1,281 @@
-// src/runtime/agent-loop.ts — Agent Runtime Loop
+// src/runtime/agent-loop.ts — Agent Runtime Loop with Git Integration
 
-import type {
-  AgentConfig,
-  RunResult,
-  LLMMessage,
-  LLMToolDef,
-  LLMUsage,
-  ContentBlock,
-  ToolUseBlock,
-  ToolResultBlock,
-  StorageMessage,
-  UserMessage,
-  AssistantMessage,
-  ToolResultMessage,
-} from '../types/index.js';
-import type { AnthropicClient } from '../llm/anthropic-client.js';
-import type { SessionStorage } from '../storage/session-storage.js';
-import type { ToolRegistry } from '../tools/registry.js';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import type { Tool, ToolResult } from '../types/index.js';
+import {
+  WorktreeManager,
+  AutoCommitter,
+  wrapTool,
+  diff,
+  type CreateWorktreeResult,
+} from '../git/index.js';
 
 /**
- * AgentLoop — Core agent runtime loop
- * 
- * Orchestrates the agent execution cycle:
- * 1. Creates a session
- * 2. Sends messages to LLM
- * 3. Executes tool calls
- * 4. Repeats until completion or max steps
+ * Configuration for the Agent Runtime
+ */
+export interface RuntimeConfig {
+  /** Path to the git repository */
+  repoPath: string;
+  /** Enable git safety features (default: true if .git exists) */
+  gitSafety?: boolean;
+  /** Keep worktree after run finishes (default: false) */
+  keepWorktree?: boolean;
+  /** Protected branch patterns (default: ['main', 'master', 'develop', ...]) */
+  protectedBranches?: string[];
+  /** Base directory for worktrees (optional) */
+  worktreeBaseDir?: string;
+}
+
+/**
+ * Runtime state for a run
+ */
+interface RunState {
+  runId: string;
+  worktree?: CreateWorktreeResult;
+  baseBranch: string;
+}
+
+/**
+ * AgentLoop - Manages the runtime loop for agent execution with Git integration
  */
 export class AgentLoop {
-  constructor(
-    private anthropicClient: AnthropicClient,
-    private sessionStorage: SessionStorage,
-    private toolRegistry: ToolRegistry,
-    private config: AgentConfig
-  ) {}
+  private config: RuntimeConfig;
+  private worktreeManager: WorktreeManager;
+  private autoCommitter: AutoCommitter;
+  private activeRuns: Map<string, RunState> = new Map();
+  private gitEnabled: boolean;
+
+  constructor(config: RuntimeConfig) {
+    this.config = config;
+    this.worktreeManager = new WorktreeManager(config.worktreeBaseDir);
+    this.autoCommitter = new AutoCommitter();
+
+    // Determine if git safety should be enabled
+    this.gitEnabled = this.shouldEnableGit();
+  }
 
   /**
-   * Run the agent with a user prompt
-   * @param prompt - User input to process
-   * @returns RunResult with session ID, steps taken, final response, and status
+   * Check if git safety should be enabled
    */
-  async run(prompt: string): Promise<RunResult> {
-    // 1. Create session
-    const session = await this.sessionStorage.create('agent-runtime');
-    
-    // 2. Add initial user message
-    const userMessage: UserMessage = {
-      role: 'user',
-      content: prompt,
-      timestamp: new Date().toISOString(),
-    };
-    await this.sessionStorage.addMessage(session.id, userMessage);
+  private shouldEnableGit(): boolean {
+    // If explicitly disabled, respect that
+    if (this.config.gitSafety === false) {
+      return false;
+    }
 
-    // Initialize tracking
-    let step = 0;
-    let status: RunResult['status'] = 'completed';
-    let totalUsage: LLMUsage = {
-      input_tokens: 0,
-      output_tokens: 0,
-    };
-    let finalResponse = '';
-
-    try {
-      // 3. Main loop
-      while (step < this.config.maxSteps) {
-        step++;
-
-        // a. Load current session state and convert messages
-        const currentSession = await this.sessionStorage.load(session.id);
-        const llmMessages = this.convertToLLMMessages(currentSession.messages);
-
-        // b. Get tool definitions
-        const tools = this.getToolDefinitions();
-
-        // c. Send to LLM
-        const response = await this.anthropicClient.sendMessage(
-          llmMessages,
-          tools.length > 0 ? tools : undefined,
-          { system: this.config.systemPrompt }
+    // If explicitly enabled but no .git directory, disable gracefully
+    const gitDir = resolve(this.config.repoPath, '.git');
+    if (!existsSync(gitDir)) {
+      if (this.config.gitSafety === true) {
+        console.warn(
+          `[AgentLoop] Git safety requested but .git not found at ${gitDir}. Disabling git features.`
         );
-
-        // Track token usage
-        totalUsage.input_tokens += response.usage.input_tokens;
-        totalUsage.output_tokens += response.usage.output_tokens;
-
-        // d. Save assistant response
-        const assistantContent = this.extractTextContent(response.content);
-        const assistantMessage: AssistantMessage = {
-          role: 'assistant',
-          content: assistantContent,
-          timestamp: new Date().toISOString(),
-        };
-        await this.sessionStorage.addMessage(session.id, assistantMessage);
-
-        // e. Handle stop reason
-        if (response.stop_reason === 'end_turn') {
-          status = 'completed';
-          finalResponse = assistantContent;
-          break;
-        }
-
-        if (response.stop_reason === 'tool_use') {
-          // Extract tool use blocks
-          const toolUseBlocks = response.content.filter(
-            (block): block is ToolUseBlock => block.type === 'tool_use'
-          );
-
-          // Execute each tool and collect results
-          for (const toolUse of toolUseBlocks) {
-            const toolResult = await this.executeTool(toolUse);
-            
-            // Save tool result as message
-            const toolResultMessage: ToolResultMessage = {
-              role: 'tool_result',
-              content: toolResult.content,
-              toolCallId: toolResult.tool_use_id,
-              timestamp: new Date().toISOString(),
-            };
-            await this.sessionStorage.addMessage(session.id, toolResultMessage);
-          }
-
-          // Save session after tool execution
-          await this.sessionStorage.save(await this.sessionStorage.load(session.id));
-          
-          // Continue loop for next LLM call
-          continue;
-        }
-
-        // Other stop reasons (max_tokens, stop_sequence)
-        status = 'completed';
-        finalResponse = assistantContent;
-        break;
       }
-
-      // Check if we hit max steps
-      if (step >= this.config.maxSteps && status !== 'completed') {
-        status = 'max_steps_reached';
-        // Use last assistant message as final response
-        const currentSession = await this.sessionStorage.load(session.id);
-        const lastAssistantMsg = [...currentSession.messages]
-          .reverse()
-          .find(msg => msg.role === 'assistant');
-        finalResponse = lastAssistantMsg?.content ?? 'Max steps reached without completion';
-      }
-
-      // 4. Save final session state
-      await this.sessionStorage.save(await this.sessionStorage.load(session.id));
-
-      // 5. Return result
-      return {
-        sessionId: session.id,
-        steps: step,
-        finalResponse,
-        tokenUsage: totalUsage,
-        status,
-      };
-
-    } catch (error) {
-      // Handle errors
-      status = 'failed';
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      
-      return {
-        sessionId: session.id,
-        steps: step,
-        finalResponse: `Error: ${errorMessage}`,
-        tokenUsage: totalUsage,
-        status,
-      };
+      return false;
     }
+
+    // Default: enable if .git exists
+    return true;
   }
 
   /**
-   * Convert session messages to LLM format
+   * Start a new run with git integration
+   * @param runId - Unique run identifier
+   * @param repoPath - Path to repository (overrides config if provided)
+   * @param tools - Array of tools to wrap with branch guards
+   * @param options - Additional options
+   * @returns Wrapped tools and worktree info
    */
-  private convertToLLMMessages(messages: Array<{ role: string; content: string; toolCallId?: string }>): LLMMessage[] {
-    const llmMessages: LLMMessage[] = [];
-    const toolResultBuffer: ToolResultBlock[] = [];
+  async start(
+    runId: string,
+    repoPath?: string,
+    tools: Tool[] = [],
+    options?: { baseBranch?: string }
+  ): Promise<{
+    tools: Tool[];
+    worktreePath?: string;
+    branchName?: string;
+  }> {
+    const actualRepoPath = repoPath || this.config.repoPath;
+    let baseBranch = options?.baseBranch || 'HEAD';
 
-    for (const msg of messages) {
-      if (msg.role === 'user') {
-        // Flush any buffered tool results first
-        if (toolResultBuffer.length > 0) {
-          llmMessages.push({
-            role: 'user',
-            content: [...toolResultBuffer],
-          });
-          toolResultBuffer.length = 0;
-        }
-        // Add user message
-        llmMessages.push({
-          role: 'user',
-          content: msg.content,
-        });
-      } else if (msg.role === 'assistant') {
-        // Flush any buffered tool results first
-        if (toolResultBuffer.length > 0) {
-          llmMessages.push({
-            role: 'user',
-            content: [...toolResultBuffer],
-          });
-          toolResultBuffer.length = 0;
-        }
-        // Add assistant message
-        llmMessages.push({
-          role: 'assistant',
-          content: msg.content,
-        });
-      } else if (msg.role === 'tool') {
-        // Buffer tool results (they get sent as user messages with ToolResultBlock content)
-        toolResultBuffer.push({
-          type: 'tool_result',
-          tool_use_id: msg.toolCallId ?? '',
-          content: msg.content,
-          is_error: msg.content.includes('Error:'), // Simple heuristic
-        });
+    // Resolve HEAD to actual branch name if needed
+    if (this.gitEnabled && baseBranch === 'HEAD') {
+      const { getCurrentBranch } = await import('../git/index.js');
+      const branchResult = getCurrentBranch(actualRepoPath);
+      if (branchResult.success && branchResult.data) {
+        baseBranch = branchResult.data;
       }
     }
 
-    // Flush remaining tool results
-    if (toolResultBuffer.length > 0) {
-      llmMessages.push({
-        role: 'user',
-        content: [...toolResultBuffer],
-      });
+    // If git is disabled, return tools as-is
+    if (!this.gitEnabled) {
+      this.activeRuns.set(runId, { runId, baseBranch });
+      return { tools };
     }
 
-    return llmMessages;
+    // Create worktree
+    const worktreeResult = this.worktreeManager.createForRun(runId, actualRepoPath, baseBranch);
+
+    if (!worktreeResult.success) {
+      throw new Error(`Failed to create worktree: ${worktreeResult.error}`);
+    }
+
+    const worktree = worktreeResult.data!;
+
+    // Store run state
+    this.activeRuns.set(runId, {
+      runId,
+      worktree,
+      baseBranch,
+    });
+
+    // Wrap tools with branch guards (pass worktree path as cwd)
+    const wrappedTools = tools.map((tool) =>
+      wrapTool(tool, {
+        enabled: true,
+        protectedBranches: this.config.protectedBranches,
+        cwd: worktree.worktreePath,
+      })
+    );
+
+    return {
+      tools: wrappedTools,
+      worktreePath: worktree.worktreePath,
+      branchName: worktree.branchName,
+    };
   }
 
   /**
-   * Get tool definitions for LLM
+   * Hook to call after a tool execution - creates auto-commit
+   * @param toolName - Name of the tool that was executed
+   * @param runId - Run identifier
+   * @param stepIndex - Step index in the run
+   * @returns Commit hash or null if no changes
    */
-  private getToolDefinitions(): LLMToolDef[] {
-    const toolNames = this.config.tools ?? [];
-    const definitions: LLMToolDef[] = [];
-
-    for (const name of toolNames) {
-      const tool = this.toolRegistry.get(name);
-      if (tool) {
-        definitions.push({
-          name: tool.name,
-          description: tool.description,
-          input_schema: tool.inputSchema,
-        });
-      }
+  async afterToolCall(toolName: string, runId: string, stepIndex: number): Promise<string | null> {
+    // If git is disabled, skip
+    if (!this.gitEnabled) {
+      return null;
     }
 
-    return definitions;
+    const runState = this.activeRuns.get(runId);
+    if (!runState) {
+      throw new Error(`No active run found for runId: ${runId}`);
+    }
+
+    // If no worktree, skip
+    if (!runState.worktree) {
+      return null;
+    }
+
+    // Create auto-commit
+    const commitResult = await this.autoCommitter.commitAfterTool(
+      toolName,
+      runId,
+      stepIndex,
+      runState.worktree.worktreePath
+    );
+
+    if (!commitResult.success) {
+      throw new Error(`Failed to auto-commit: ${commitResult.error}`);
+    }
+
+    return commitResult.data || null;
   }
 
   /**
-   * Execute a tool and return the result as ToolResultBlock
+   * Get diff between agent branch and base branch
+   * @param runId - Run identifier
+   * @returns Diff output or empty string
    */
-  private async executeTool(toolUse: ToolUseBlock): Promise<ToolResultBlock> {
-    try {
-      const tool = this.toolRegistry.get(toolUse.name);
-      
-      if (!tool) {
-        return {
-          type: 'tool_result',
-          tool_use_id: toolUse.id,
-          content: `Error: Tool "${toolUse.name}" not found in registry`,
-          is_error: true,
-        };
-      }
-
-      const result = await tool.execute(toolUse.input);
-
-      return {
-        type: 'tool_result',
-        tool_use_id: toolUse.id,
-        content: result.success ? result.output : `Error: ${result.error ?? 'Unknown error'}`,
-        is_error: !result.success,
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      return {
-        type: 'tool_result',
-        tool_use_id: toolUse.id,
-        content: `Error executing tool: ${errorMessage}`,
-        is_error: true,
-      };
+  async getDiff(runId: string): Promise<string> {
+    // If git is disabled, return empty
+    if (!this.gitEnabled) {
+      return '';
     }
+
+    const runState = this.activeRuns.get(runId);
+    if (!runState) {
+      throw new Error(`No active run found for runId: ${runId}`);
+    }
+
+    // If no worktree, return empty
+    if (!runState.worktree) {
+      return '';
+    }
+
+    // Get diff (from base branch to current HEAD in worktree)
+    // When in worktree, HEAD points to agent branch, so we only pass baseBranch
+    const diffResult = diff(
+      runState.baseBranch,
+      undefined,
+      runState.worktree.worktreePath
+    );
+
+    if (!diffResult.success) {
+      throw new Error(`Failed to get diff: ${diffResult.error}`);
+    }
+
+    return diffResult.data || '';
   }
 
   /**
-   * Extract text content from ContentBlocks
+   * Finish a run and cleanup
+   * @param runId - Run identifier
+   * @returns Cleanup result
    */
-  private extractTextContent(blocks: ContentBlock[]): string {
-    const textBlocks = blocks
-      .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
-      .map(block => block.text);
-    
-    return textBlocks.join('\n');
+  async finish(runId: string): Promise<{ removed: boolean; path?: string }> {
+    const runState = this.activeRuns.get(runId);
+    if (!runState) {
+      return { removed: false };
+    }
+
+    // Remove from active runs
+    this.activeRuns.delete(runId);
+
+    // If git is disabled or no worktree, nothing to cleanup
+    if (!this.gitEnabled || !runState.worktree) {
+      return { removed: false };
+    }
+
+    // If keepWorktree is true, don't remove
+    if (this.config.keepWorktree) {
+      return { removed: false, path: runState.worktree.worktreePath };
+    }
+
+    // Cleanup worktree
+    const cleanupResult = this.worktreeManager.cleanup(runId, {
+      deleteBranch: false, // Keep branch for now, can be configurable later
+    });
+
+    if (!cleanupResult.success) {
+      console.warn(`[AgentLoop] Failed to cleanup worktree: ${cleanupResult.error}`);
+      return { removed: false };
+    }
+
+    return { removed: true, path: cleanupResult.data };
+  }
+
+  /**
+   * Check if git safety is enabled
+   */
+  isGitEnabled(): boolean {
+    return this.gitEnabled;
+  }
+
+  /**
+   * Get active run state
+   */
+  getRunState(runId: string): RunState | undefined {
+    return this.activeRuns.get(runId);
+  }
+
+  /**
+   * Get all active run IDs
+   */
+  getActiveRunIds(): string[] {
+    return Array.from(this.activeRuns.keys());
   }
 }
