@@ -40,3 +40,19 @@ export {
   type DodResult,
   type DodConfig,
 } from './dod-runner.js';
+
+export {
+  generateSummary,
+  type DiffSummary,
+  type DiffStats,
+  type FileChange,
+} from './diff-summary.js';
+
+export {
+  createPr,
+  getPrStatus,
+  listOpenPrs,
+  type CreatePrOptions,
+  type PrInfo,
+  type ReviewStatus,
+} from './pr-workflow.js';
