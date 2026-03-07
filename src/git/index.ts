@@ -33,3 +33,10 @@ export {
   type CommitMetadata,
   type CommitInfo,
 } from './auto-commit.js';
+
+export {
+  DodRunner,
+  type CheckResult,
+  type DodResult,
+  type DodConfig,
+} from './dod-runner.js';
