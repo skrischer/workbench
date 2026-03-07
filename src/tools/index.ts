@@ -7,6 +7,7 @@ export { WriteFileTool } from './write-file.js';
 export { EditFileTool } from './edit-file.js';
 export { ExecTool } from './exec.js';
 export { ListFilesTool } from './list-files.js';
+export { GrepTool } from './grep.js';
 export { createDefaultTools } from './defaults.js';
 
 // Utility exports
