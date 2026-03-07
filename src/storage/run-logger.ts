@@ -149,4 +149,54 @@ export class RunLogger {
       return null;
     }
   }
+
+  /**
+   * List all runs with metadata (no full message/tool-call load)
+   * @returns Array of run metadata
+   */
+  async listRuns(): Promise<RunMetadata[]> {
+    const { readdir } = await import('node:fs/promises');
+    const runsDir = join(this.baseDir, 'runs');
+
+    try {
+      // Read all subdirectories in runsDir
+      const entries = await readdir(runsDir, { withFileTypes: true });
+      const runIds = entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name);
+
+      // Load metadata for each run
+      const metadataList = await Promise.all(
+        runIds.map(async (id) => {
+          const runJsonPath = join(runsDir, id, 'run.json');
+          
+          if (!existsSync(runJsonPath)) {
+            return null;
+          }
+
+          try {
+            const metadataJson = await readFile(runJsonPath, 'utf-8');
+            return JSON.parse(metadataJson) as RunMetadata;
+          } catch {
+            // Skip runs that can't be loaded
+            return null;
+          }
+        })
+      );
+
+      // Filter out nulls and return
+      return metadataList.filter(
+        (metadata): metadata is RunMetadata => metadata !== null
+      );
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'code' in error) {
+        const err = error as NodeJS.ErrnoException;
+        if (err.code === 'ENOENT') {
+          // Runs directory doesn't exist yet, return empty list
+          return [];
+        }
+      }
+      throw new Error(`Failed to list runs: ${error}`);
+    }
+  }
 }

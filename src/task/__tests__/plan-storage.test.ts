@@ -78,6 +78,9 @@ describe('PlanStorage', () => {
     const plan = createTestPlan();
     await storage.create(plan);
 
+    // Wait to ensure updatedAt differs from createdAt
+    await new Promise(r => setTimeout(r, 10));
+
     // Modify and save
     plan.title = 'Updated Title';
     plan.status = 'running';
