@@ -1,1 +1,1 @@
-export {};
+export { SessionStorage } from './session-storage.js';

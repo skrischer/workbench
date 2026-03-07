@@ -1,6 +1,14 @@
 // src/types/index.ts — Shared Type Definitions for Workbench
 
-/** Agent configuration */
+/** Agent runtime configuration (loaded from file or defaults) */
+export interface AgentConfig {
+  model: string;
+  systemPrompt: string;
+  tools?: string[]; // Tool name whitelist
+  maxSteps: number;
+}
+
+/** Agent instance (runtime entity with ID) */
 export interface Agent {
   id: string;
   name: string;
@@ -32,6 +40,31 @@ export interface Message {
   toolCallId?: string;
   timestamp: string;
 }
+
+/** User message for session storage */
+export interface UserMessage {
+  role: 'user';
+  content: string;
+  timestamp: string;
+}
+
+/** Assistant message for session storage */
+export interface AssistantMessage {
+  role: 'assistant';
+  content: string;
+  timestamp: string;
+}
+
+/** Tool result message for session storage */
+export interface ToolResultMessage {
+  role: 'tool_result';
+  content: string;
+  toolCallId: string;
+  timestamp: string;
+}
+
+/** Union type for storage messages */
+export type StorageMessage = UserMessage | AssistantMessage | ToolResultMessage;
 
 /** Tool call record */
 export interface ToolCall {
@@ -176,4 +209,13 @@ export interface LLMResponse {
   model: string;
   stop_reason: 'end_turn' | 'max_tokens' | 'stop_sequence' | 'tool_use';
   usage: LLMUsage;
+}
+
+/** Result of an agent run */
+export interface RunResult {
+  sessionId: string;
+  steps: number;
+  finalResponse: string;
+  tokenUsage: LLMUsage;
+  status: 'completed' | 'max_steps_reached' | 'failed';
 }

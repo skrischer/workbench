@@ -5,3 +5,4 @@ dist/
 .env
 *.log
 runs/
+node_modules
