@@ -161,4 +161,42 @@ describe('RunLogger', () => {
       expect(loaded!.metadata.status).toBe(status);
     }
   });
+
+  it('should list all runs with metadata', async () => {
+    // Create multiple runs
+    logger.startRun('list-run-1', 'First run');
+    await logger.endRun('list-run-1', 'completed', {
+      inputTokens: 100,
+      outputTokens: 50,
+      totalTokens: 150,
+    });
+
+    logger.startRun('list-run-2', 'Second run');
+    await logger.endRun('list-run-2', 'failed');
+
+    logger.startRun('list-run-3', 'Third run');
+    await logger.endRun('list-run-3', 'completed');
+
+    const runs = await logger.listRuns();
+
+    expect(runs).toHaveLength(3);
+    expect(runs.map(r => r.id).sort()).toEqual(['list-run-1', 'list-run-2', 'list-run-3']);
+    
+    const run1 = runs.find(r => r.id === 'list-run-1');
+    expect(run1!.prompt).toBe('First run');
+    expect(run1!.status).toBe('completed');
+    expect(run1!.tokenUsage).toEqual({
+      inputTokens: 100,
+      outputTokens: 50,
+      totalTokens: 150,
+    });
+
+    const run2 = runs.find(r => r.id === 'list-run-2');
+    expect(run2!.status).toBe('failed');
+  });
+
+  it('should return empty array when no runs directory exists', async () => {
+    const runs = await logger.listRuns();
+    expect(runs).toEqual([]);
+  });
 });
