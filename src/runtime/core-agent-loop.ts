@@ -17,6 +17,7 @@ import type {
 import type { AnthropicClient } from '../llm/anthropic-client.js';
 import type { SessionStorage } from '../storage/session-storage.js';
 import type { ToolRegistry } from '../tools/registry.js';
+import type { TypedEventBus } from '../events/event-bus.js';
 
 /**
  * AgentLoop — Core agent runtime loop
@@ -32,7 +33,8 @@ export class CoreAgentLoop {
     private anthropicClient: AnthropicClient,
     private sessionStorage: SessionStorage,
     private toolRegistry: ToolRegistry,
-    private config: AgentConfig
+    private config: AgentConfig,
+    private eventBus?: TypedEventBus
   ) {}
 
   /**
@@ -43,6 +45,14 @@ export class CoreAgentLoop {
   async run(prompt: string): Promise<RunResult> {
     // 1. Create session
     const session = await this.sessionStorage.create('agent-runtime');
+    const runId = session.id;
+    
+    // Emit run:start event
+    this.eventBus?.emit('run:start', {
+      runId,
+      agentConfig: this.config,
+      prompt,
+    });
     
     // 2. Add initial user message
     const userMessage: UserMessage = {
@@ -73,6 +83,13 @@ export class CoreAgentLoop {
         // b. Get tool definitions
         const tools = this.getToolDefinitions();
 
+        // Emit llm:request event
+        this.eventBus?.emit('llm:request', {
+          runId,
+          model: this.config.model ?? 'unknown',
+          messageCount: llmMessages.length,
+        });
+
         // c. Send to LLM
         const response = await this.anthropicClient.sendMessage(
           llmMessages,
@@ -84,6 +101,16 @@ export class CoreAgentLoop {
         totalUsage.input_tokens += response.usage.input_tokens;
         totalUsage.output_tokens += response.usage.output_tokens;
 
+        // Emit llm:response event
+        this.eventBus?.emit('llm:response', {
+          runId,
+          model: this.config.model ?? 'unknown',
+          tokenUsage: {
+            inputTokens: response.usage.input_tokens,
+            outputTokens: response.usage.output_tokens,
+          },
+        });
+
         // d. Save assistant response
         const assistantContent = this.extractTextContent(response.content);
         const assistantMessage: AssistantMessage = {
@@ -92,6 +119,13 @@ export class CoreAgentLoop {
           timestamp: new Date().toISOString(),
         };
         await this.sessionStorage.addMessage(session.id, assistantMessage);
+
+        // Emit run:step event
+        this.eventBus?.emit('run:step', {
+          runId,
+          stepIndex: step,
+          message: assistantMessage,
+        });
 
         // e. Handle stop reason
         if (response.stop_reason === 'end_turn') {
@@ -108,7 +142,30 @@ export class CoreAgentLoop {
 
           // Execute each tool and collect results
           for (const toolUse of toolUseBlocks) {
+            // Emit tool:call event
+            this.eventBus?.emit('tool:call', {
+              runId,
+              toolName: toolUse.name,
+              input: toolUse.input,
+              stepIndex: step,
+            });
+
+            // Execute tool and measure duration
+            const startTime = performance.now();
             const toolResult = await this.executeTool(toolUse);
+            const durationMs = performance.now() - startTime;
+
+            // Emit tool:result event
+            this.eventBus?.emit('tool:result', {
+              runId,
+              toolName: toolUse.name,
+              result: {
+                success: !toolResult.is_error,
+                output: toolResult.content,
+                error: toolResult.is_error ? toolResult.content : undefined,
+              },
+              durationMs,
+            });
             
             // Save tool result as message
             const toolResultMessage: ToolResultMessage = {
@@ -147,6 +204,17 @@ export class CoreAgentLoop {
       // 4. Save final session state
       await this.sessionStorage.save(await this.sessionStorage.load(session.id));
 
+      // Emit run:end event
+      this.eventBus?.emit('run:end', {
+        runId,
+        result: finalResponse,
+        tokenUsage: {
+          inputTokens: totalUsage.input_tokens,
+          outputTokens: totalUsage.output_tokens,
+          totalTokens: totalUsage.input_tokens + totalUsage.output_tokens,
+        },
+      });
+
       // 5. Return result
       return {
         sessionId: session.id,
@@ -160,6 +228,12 @@ export class CoreAgentLoop {
       // Handle errors
       status = 'failed';
       const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      // Emit run:error event
+      this.eventBus?.emit('run:error', {
+        runId,
+        error: errorMessage,
+      });
       
       return {
         sessionId: session.id,

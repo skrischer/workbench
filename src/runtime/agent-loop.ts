@@ -3,6 +3,9 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Tool, ToolResult } from '../types/index.js';
+import type { TypedEventBus } from '../events/event-bus.js';
+import type { TokenTracker } from './token-tracker.js';
+import type { RunLogger } from '../storage/run-logger.js';
 import {
   WorktreeManager,
   AutoCommitter,
@@ -25,6 +28,8 @@ export interface RuntimeConfig {
   protectedBranches?: string[];
   /** Base directory for worktrees (optional) */
   worktreeBaseDir?: string;
+  /** Event bus for runtime events (optional) */
+  eventBus?: TypedEventBus;
 }
 
 /**
@@ -45,9 +50,11 @@ export class AgentLoop {
   private autoCommitter: AutoCommitter;
   private activeRuns: Map<string, RunState> = new Map();
   private gitEnabled: boolean;
+  private eventBus?: TypedEventBus;
 
   constructor(config: RuntimeConfig) {
     this.config = config;
+    this.eventBus = config.eventBus;
     this.worktreeManager = new WorktreeManager(config.worktreeBaseDir);
     this.autoCommitter = new AutoCommitter();
 
@@ -277,5 +284,26 @@ export class AgentLoop {
    */
   getActiveRunIds(): string[] {
     return Array.from(this.activeRuns.keys());
+  }
+
+  /**
+   * Get the event bus instance
+   */
+  getEventBus(): TypedEventBus | undefined {
+    return this.eventBus;
+  }
+
+  /**
+   * Get the token tracker instance (attached by createRuntime)
+   */
+  getTokenTracker(): TokenTracker | undefined {
+    return (this as any)._tokenTracker;
+  }
+
+  /**
+   * Get the run logger instance (attached by createRuntime)
+   */
+  getRunLogger(): RunLogger | undefined {
+    return (this as any)._runLogger;
   }
 }
