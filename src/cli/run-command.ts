@@ -6,7 +6,7 @@ import { loadAgentConfig } from '../agent/config.js';
 import { AnthropicClient } from '../llm/anthropic-client.js';
 import { TokenRefresher } from '../llm/token-refresh.js';
 import { TokenStorage } from '../llm/token-storage.js';
-import { AgentLoop } from '../runtime/agent-loop.js';
+import { CoreAgentLoop } from '../runtime/core-agent-loop.js';
 import { SessionStorage } from '../storage/session-storage.js';
 import { createDefaultTools } from '../tools/defaults.js';
 import { ToolRegistry } from '../tools/registry.js';
@@ -147,8 +147,8 @@ export async function runCommand(prompt: string, options: RunCommandOptions): Pr
     // 6. Create SessionStorage
     const sessionStorage = new SessionStorage();
 
-    // 7. Create AgentLoop
-    const agentLoop = new AgentLoop(
+    // 7. Create CoreAgentLoop
+    const agentLoop = new CoreAgentLoop(
       anthropicClient,
       sessionStorage,
       toolRegistry,
