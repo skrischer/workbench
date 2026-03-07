@@ -231,3 +231,11 @@ export type {
   MemoryResult,
   EmbeddingConfig,
 } from './memory.js';
+// Multi-Agent System Types
+export type {
+  AgentRole,
+  AgentStatus,
+  AgentInstance,
+  SpawnConfig,
+  AgentMessage,
+} from './agent.js';
