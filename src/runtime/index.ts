@@ -3,3 +3,4 @@
 export { CoreAgentLoop } from './core-agent-loop.js';
 export { AgentLoop, type RuntimeConfig } from './agent-loop.js';
 export { createRuntime } from './create-runtime.js';
+export { TokenTracker } from './token-tracker.js';
