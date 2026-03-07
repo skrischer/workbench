@@ -1,6 +1,7 @@
 // src/multi-agent/index.ts — Multi-Agent System Exports
 
 export { validateSpawnConfig, validateAgentMessage } from './validation.js';
+export { AgentRegistry } from './agent-registry.js';
 export type {
   AgentRole,
   AgentStatus,
