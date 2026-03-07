@@ -2,7 +2,6 @@
 
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { Tool, ToolResult } from '../types/index.js';
 import type { TypedEventBus } from '../events/event-bus.js';
 import type { TokenTracker } from './token-tracker.js';
 import type { RunLogger } from '../storage/run-logger.js';
@@ -311,6 +310,8 @@ export class AgentLoop {
    */
   getRunLogger(): RunLogger | undefined {
     return (this as any)._runLogger;
+  }
+  /**
    * Enable automatic session summarization after runs.
    * When enabled, the agent will generate a summary of the session messages
    * and store it in the memory store after each run finishes.
