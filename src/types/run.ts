@@ -1,6 +1,5 @@
 // src/types/run.ts — Run Logger Type Definitions
 
-import type { Message, ToolCall } from './index.js';
 import type { TokenUsage } from './events.js';
 
 /** Run status */

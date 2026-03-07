@@ -1,4 +1,6 @@
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
+import RunsPage from './pages/RunsPage.js';
+import RunDetailPage from './pages/RunDetailPage.js';
 
 function HomePage() {
   return (
@@ -15,21 +17,6 @@ function HomePage() {
             View Plans
           </Link>
         </nav>
-      </div>
-    </div>
-  );
-}
-
-function RunsPage() {
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">Runs</h1>
-        <p className="text-gray-600">Agent execution history will appear here.</p>
-        
-        <Link to="/" className="mt-4 inline-block text-blue-600 hover:text-blue-800 underline">
-          ← Back to Home
-        </Link>
       </div>
     </div>
   );
@@ -56,6 +43,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/runs" element={<RunsPage />} />
+        <Route path="/runs/:id" element={<RunDetailPage />} />
         <Route path="/plans" element={<PlansPage />} />
       </Routes>
     </BrowserRouter>
