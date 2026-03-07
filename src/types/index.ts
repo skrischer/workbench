@@ -239,3 +239,9 @@ export type {
   SpawnConfig,
   AgentMessage,
 } from './agent.js';
+// Workflow System Types
+export type {
+  WorkflowDefinition,
+  WorkflowInput,
+  WorkflowResult,
+} from './workflow.js';
