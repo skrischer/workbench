@@ -104,3 +104,16 @@ export interface Plan {
   status: 'draft' | 'active' | 'completed' | 'failed';
   createdAt: string;
 }
+
+/** OAuth token data stored in tokens.json */
+export interface TokenData {
+  type: 'oauth';
+  access: string;
+  refresh: string;
+  expires: number;
+}
+
+/** Structure of the tokens.json file */
+export interface TokenFile {
+  anthropic: TokenData;
+}
