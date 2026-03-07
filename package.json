@@ -9,6 +9,7 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
+    "test:watch": "vitest",
     "dev": "tsc --watch",
     "check": "tsc --noEmit"
   },

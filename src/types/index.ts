@@ -219,3 +219,6 @@ export interface RunResult {
   tokenUsage: LLMUsage;
   status: 'completed' | 'max_steps_reached' | 'failed';
 }
+
+// Re-export event types
+export type { EventMap, EventListener, Unsubscribe, TokenUsage, StepTokenUsage } from './events.js';
