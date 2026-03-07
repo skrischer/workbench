@@ -9,6 +9,7 @@ export { ExecTool } from './exec.js';
 export { ListFilesTool } from './list-files.js';
 export { GrepTool } from './grep.js';
 export { SearchCodeTool } from './search-code.js';
+export { ProjectSummaryTool } from './project-summary.js';
 export { createDefaultTools } from './defaults.js';
 
 // Utility exports
