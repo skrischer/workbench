@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { runCommand } from './run-command.js';
+import { createPlanCommand } from './plan-command.js';
+import { createRunPlanCommand } from './run-plan-command.js';
+import { createPlansCommand } from './plans-command.js';
 
 const program = new Command();
 
@@ -26,5 +29,10 @@ program
   .action(async (prompt: string, options: { model?: string; maxSteps?: number; config?: string }) => {
     await runCommand(prompt, options);
   });
+
+// Register plan-related commands
+program.addCommand(createPlanCommand());
+program.addCommand(createRunPlanCommand());
+program.addCommand(createPlansCommand());
 
 program.parse();
