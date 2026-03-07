@@ -117,3 +117,62 @@ export interface TokenData {
 export interface TokenFile {
   anthropic: TokenData;
 }
+
+/** Content block types from Anthropic Messages API */
+export interface TextBlock {
+  type: 'text';
+  text: string;
+}
+
+export interface ToolUseBlock {
+  type: 'tool_use';
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+export interface ToolResultBlock {
+  type: 'tool_result';
+  tool_use_id: string;
+  content: string;
+  is_error?: boolean;
+}
+
+export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock;
+
+/** Message for Anthropic Messages API */
+export interface LLMMessage {
+  role: 'user' | 'assistant';
+  content: string | ContentBlock[];
+}
+
+/** Tool definition for Anthropic API */
+export interface LLMToolDef {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+}
+
+/** LLM configuration */
+export interface LLMConfig {
+  model: string;
+  maxTokens: number;
+  apiUrl?: string;
+}
+
+/** Usage stats from API response */
+export interface LLMUsage {
+  input_tokens: number;
+  output_tokens: number;
+}
+
+/** Response from Anthropic Messages API */
+export interface LLMResponse {
+  id: string;
+  type: 'message';
+  role: 'assistant';
+  content: ContentBlock[];
+  model: string;
+  stop_reason: 'end_turn' | 'max_tokens' | 'stop_sequence' | 'tool_use';
+  usage: LLMUsage;
+}
