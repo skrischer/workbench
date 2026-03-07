@@ -6,6 +6,7 @@ import type { Tool, ToolResult } from '../types/index.js';
 import type { TypedEventBus } from '../events/event-bus.js';
 import type { TokenTracker } from './token-tracker.js';
 import type { RunLogger } from '../storage/run-logger.js';
+import type { Tool, ToolResult, Message } from '../types/index.js';
 import {
   WorktreeManager,
   AutoCommitter,
@@ -13,6 +14,8 @@ import {
   diff,
   type CreateWorktreeResult,
 } from '../git/index.js';
+import type { LanceDBMemoryStore } from '../memory/lancedb-store.js';
+import { SessionSummarizer, type LLMCallback } from '../memory/session-summarizer.js';
 
 /**
  * Configuration for the Agent Runtime
@@ -51,6 +54,9 @@ export class AgentLoop {
   private activeRuns: Map<string, RunState> = new Map();
   private gitEnabled: boolean;
   private eventBus?: TypedEventBus;
+  private autoSummaryStore?: LanceDBMemoryStore;
+  private autoSummaryCallback?: LLMCallback;
+  private summarizer?: SessionSummarizer;
 
   constructor(config: RuntimeConfig) {
     this.config = config;
@@ -305,5 +311,72 @@ export class AgentLoop {
    */
   getRunLogger(): RunLogger | undefined {
     return (this as any)._runLogger;
+   * Enable automatic session summarization after runs.
+   * When enabled, the agent will generate a summary of the session messages
+   * and store it in the memory store after each run finishes.
+   * 
+   * @param store - LanceDB memory store for storing summaries
+   * @param llmCallback - Callback function for generating summaries via LLM
+   * @param config - Optional summarizer configuration
+   */
+  enableAutoSummary(
+    store: LanceDBMemoryStore,
+    llmCallback: LLMCallback,
+    config?: { minMessages?: number; maxTags?: number }
+  ): void {
+    this.autoSummaryStore = store;
+    this.autoSummaryCallback = llmCallback;
+    this.summarizer = new SessionSummarizer(llmCallback, config);
+  }
+
+  /**
+   * Disable automatic session summarization.
+   */
+  disableAutoSummary(): void {
+    this.autoSummaryStore = undefined;
+    this.autoSummaryCallback = undefined;
+    this.summarizer = undefined;
+  }
+
+  /**
+   * Generate and store a summary of session messages.
+   * This is called automatically after each run if auto-summary is enabled.
+   * Can also be called manually for on-demand summarization.
+   * 
+   * @param sessionId - Session identifier
+   * @param messages - Array of session messages to summarize
+   * @returns Summary memory entry or null if not enough messages
+   */
+  async summarizeSession(sessionId: string, messages: Message[]): Promise<string | null> {
+    if (!this.autoSummaryStore || !this.summarizer) {
+      throw new Error('Auto-summary not enabled. Call enableAutoSummary() first.');
+    }
+
+    try {
+      // Initialize store if needed
+      await this.autoSummaryStore.init();
+
+      // Generate summary
+      const summaryEntry = await this.summarizer.summarize(messages, sessionId);
+
+      if (!summaryEntry) {
+        return null; // Not enough messages
+      }
+
+      // Store summary in memory
+      const stored = await this.autoSummaryStore.add(summaryEntry);
+
+      return stored.id;
+    } catch (error) {
+      console.error('[AgentLoop] Failed to generate session summary:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Check if auto-summary is enabled
+   */
+  isAutoSummaryEnabled(): boolean {
+    return !!this.autoSummaryStore && !!this.summarizer;
   }
 }
