@@ -6,4 +6,9 @@ export { ReadFileTool } from './read-file.js';
 export { WriteFileTool } from './write-file.js';
 export { EditFileTool } from './edit-file.js';
 export { ExecTool } from './exec.js';
+export { ListFilesTool } from './list-files.js';
 export { createDefaultTools } from './defaults.js';
+
+// Utility exports
+export { defaultIgnores, shouldIgnore, walkDirectory } from './utils/ignore.js';
+export type { WalkOptions, WalkEntry } from './utils/ignore.js';
