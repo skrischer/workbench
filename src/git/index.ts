@@ -19,3 +19,11 @@ export {
   type ActiveWorktree,
   type CreateWorktreeResult,
 } from './worktree-manager.js';
+
+export {
+  isProtectedBranch,
+  assertOnAgentBranch,
+  wrapTool,
+  DEFAULT_PROTECTED_BRANCHES,
+  type BranchGuardConfig,
+} from './branch-guard.js';
