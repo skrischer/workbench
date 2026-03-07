@@ -2,3 +2,4 @@
 
 export type { Task, Plan, Step, PlanStatus, StepStatus, StepResult } from '../types/task.js';
 export { validatePlan, validateStep } from './validation.js';
+export { PlanStorage } from './plan-storage.js';
