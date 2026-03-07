@@ -8,6 +8,7 @@ export { EditFileTool } from './edit-file.js';
 export { ExecTool } from './exec.js';
 export { ListFilesTool } from './list-files.js';
 export { GrepTool } from './grep.js';
+export { SearchCodeTool } from './search-code.js';
 export { createDefaultTools } from './defaults.js';
 
 // Utility exports
