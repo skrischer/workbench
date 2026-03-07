@@ -33,6 +33,8 @@ export interface EventMap {
   'agent:spawned': { id: string; role: string; sessionId: string };
   'agent:status': { id: string; status: string; previousStatus?: string };
   'agent:terminated': { id: string; role: string };
+  'message:sent': { from: string; to: string; type: string; payload: unknown };
+  'message:received': { agentId: string; from: string; to: string; type: string; payload: unknown };
 }
 
 /** Event listener function */

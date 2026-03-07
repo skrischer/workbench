@@ -2,6 +2,7 @@
 
 export { validateSpawnConfig, validateAgentMessage } from './validation.js';
 export { AgentRegistry } from './agent-registry.js';
+export { MessageBus } from './message-bus.js';
 export type {
   AgentRole,
   AgentStatus,
