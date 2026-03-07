@@ -3,6 +3,7 @@
 export { validateSpawnConfig, validateAgentMessage } from './validation.js';
 export { AgentRegistry } from './agent-registry.js';
 export { MessageBus } from './message-bus.js';
+export { AgentOrchestrator } from './orchestrator.js';
 export type {
   AgentRole,
   AgentStatus,
@@ -10,3 +11,4 @@ export type {
   SpawnConfig,
   AgentMessage,
 } from '../types/agent.js';
+export type { OrchestratorOptions, PlanExecutionResult } from './orchestrator.js';
