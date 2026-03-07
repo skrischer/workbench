@@ -22,6 +22,7 @@ export interface ToolResult {
   success: boolean;
   output: string;
   error?: string;
+  metadata?: Record<string, unknown>;
 }
 
 /** Message in a session */
