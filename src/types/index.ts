@@ -33,6 +33,31 @@ export interface Message {
   timestamp: string;
 }
 
+/** User message for session storage */
+export interface UserMessage {
+  role: 'user';
+  content: string;
+  timestamp: string;
+}
+
+/** Assistant message for session storage */
+export interface AssistantMessage {
+  role: 'assistant';
+  content: string;
+  timestamp: string;
+}
+
+/** Tool result message for session storage */
+export interface ToolResultMessage {
+  role: 'tool_result';
+  content: string;
+  toolCallId: string;
+  timestamp: string;
+}
+
+/** Union type for storage messages */
+export type StorageMessage = UserMessage | AssistantMessage | ToolResultMessage;
+
 /** Tool call record */
 export interface ToolCall {
   id: string;
