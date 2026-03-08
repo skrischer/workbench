@@ -14,10 +14,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import App from '../../../dashboard/ui/src/App.js';
-import RunsPage from '../../../dashboard/ui/src/pages/RunsPage.js';
-import RunDetailPage from '../../../dashboard/ui/src/pages/RunDetailPage.js';
-import { PlansPage } from '../../../dashboard/ui/src/pages/PlansPage.js';
+import App from '../App.js';
+import RunsPage from '../pages/RunsPage.js';
+import RunDetailPage from '../pages/RunDetailPage.js';
+import { PlansPage } from '../pages/PlansPage.js';
 import type { RunMetadata, RunLog } from '../../../types/run.js';
 import type { Plan } from '../../../types/task.js';
 
