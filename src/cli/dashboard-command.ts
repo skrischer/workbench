@@ -40,7 +40,7 @@ export function createDashboardCommand(): Command {
         }
 
         // Create and start dashboard
-        const dashboard = createDashboard(config);
+        const dashboard = await createDashboard(config);
         
         await dashboard.start();
 

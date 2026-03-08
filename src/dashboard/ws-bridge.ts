@@ -157,13 +157,17 @@ export function attachWebSocket(
 
     clients.set(clientId, state);
 
-    // Send connection confirmation
-    const connectedMsg: ConnectedMessage = {
-      type: 'connected',
-      clientId,
-      subscribedEvents: Array.from(state.subscribedEvents),
-    };
-    socket.send(JSON.stringify(connectedMsg));
+    // Send connection confirmation (wait for socket to be fully ready)
+    setImmediate(() => {
+      if (socket.readyState === 1) { // 1 = OPEN
+        const connectedMsg: ConnectedMessage = {
+          type: 'connected',
+          clientId,
+          subscribedEvents: Array.from(state.subscribedEvents),
+        };
+        socket.send(JSON.stringify(connectedMsg));
+      }
+    });
 
     // Setup heartbeat ping (every 30 seconds)
     state.pingInterval = setInterval(() => {

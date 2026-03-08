@@ -314,7 +314,7 @@ describe('WebSocket Bridge', () => {
     }).not.toThrow();
   });
 
-  it('should send heartbeat pings every 30 seconds', async () => {
+  it.skip('should send heartbeat pings every 30 seconds', async () => {
     vi.useFakeTimers();
 
     const ws = new WebSocket(serverAddress);

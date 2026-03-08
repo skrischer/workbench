@@ -18,7 +18,7 @@ describe('Dashboard API Endpoints (inject)', () => {
     process.env.WORKBENCH_HOME = testEnv.workbenchHome;
     
     // Create dashboard with server and routes
-    dashboard = createDashboard({ port: 0, host: 'localhost' });
+    dashboard = await createDashboard({ port: 0, host: 'localhost' });
     app = dashboard.server;
     
     // Prepare server (required before inject)

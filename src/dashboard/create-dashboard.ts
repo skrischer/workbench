@@ -34,9 +34,9 @@ export interface DashboardInstance {
  * @param config - Dashboard configuration (port, host, CORS)
  * @returns Dashboard instance with start/stop methods
  */
-export function createDashboard(config: DashboardConfig = {}): DashboardInstance {
+export async function createDashboard(config: DashboardConfig = {}): Promise<DashboardInstance> {
   // 1. Create Fastify server
-  const server = createServer(config);
+  const server = await createServer(config);
 
   // 2. Create EventBus
   const eventBus = new TypedEventBus<EventMap>();
