@@ -15,14 +15,31 @@ Dashboard für reale Nutzung skalierbar machen. Aktuell gibt es keine Pagination
 **Beschreibung:** Query-Parameter `?limit=` und `?offset=` für alle Listen-Endpoints (`/api/runs`, `/api/plans`, `/api/sessions`). Antwort enthält `total` Count für Frontend-Pagination.
 
 **Dateien erstellt/geändert:**
+- `src/types/storage.ts` (neu — generisches `StorageListOptions` Interface)
 - `src/dashboard/routes/runs.ts` (Pagination-Parameter)
 - `src/dashboard/routes/plans.ts` (Pagination-Parameter)
 - `src/dashboard/routes/sessions.ts` (Pagination-Parameter)
-- `src/storage/session-storage.ts` (list() mit offset/limit)
-- `src/storage/run-logger.ts` (list() mit offset/limit)
-- `src/task/plan-storage.ts` (list() mit offset/limit)
+- `src/storage/session-storage.ts` (list() implementiert StorageListOptions)
+- `src/storage/run-logger.ts` (list() implementiert StorageListOptions)
+- `src/task/plan-storage.ts` (list() implementiert StorageListOptions)
 - `src/dashboard/__tests__/pagination.test.ts` (neu)
 - `src/dashboard/ui/src/hooks/useApi.ts` (Pagination-Support)
+
+**Design-Hinweis:** Alle Storage-Module implementieren dasselbe generische Interface:
+```typescript
+interface StorageListOptions {
+  offset?: number;    // default: 0
+  limit?: number;     // default: 50, max: 100
+  sort?: 'asc' | 'desc'; // default: 'desc' (neueste zuerst)
+}
+interface StorageListResult<T> {
+  data: T[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+```
+Das Interface wird in `src/types/storage.ts` definiert und von allen Storage-Modulen importiert — konsistente API, vorwärtskompatibel mit SQLite-Migration.
 
 **Acceptance Criteria:**
 - `GET /api/runs?limit=10&offset=0` → `{ data: [...], total: 42, limit: 10, offset: 0 }`
@@ -51,6 +68,7 @@ Dashboard für reale Nutzung skalierbar machen. Aktuell gibt es keine Pagination
 **Acceptance Criteria:**
 - Config: `wsToken: string | null` — wenn gesetzt, müssen Clients Token mitschicken
 - Client sendet Token als Query-Parameter: `ws://host:port/ws?token=XYZ`
+- **Bekannter Kompromiss:** Token im Query-Parameter erscheint in Server-Logs und Browser-History. Für Tailscale-Only-Zugang akzeptabel. Follow-up: Migration zu `Sec-WebSocket-Protocol` Header für Token-Transport (kein Log-Leak).
 - Ungültiges/fehlendes Token → Connection rejected (WebSocket close mit Code 4401)
 - Wenn `wsToken: null` → keine Auth (Rückwärtskompatibel)
 - Token aus Environment: `WORKBENCH_WS_TOKEN` oder Config-File
@@ -107,4 +125,5 @@ Wave 1 (parallel — alle unabhängig):
 ## Offene Fragen / Risiken
 - **Pagination + JSON Storage:** Aktuell liest `list()` alle Files und gibt alle zurück. Pagination erfordert: alle laden, sortieren, slicen. Bei >1000 Runs wird das langsam → SQLite-Migration (bereits auf der Roadmap) löst das langfristig.
 - **WS-Token Rotation:** Einfaches statisches Token für v1. Token-Rotation oder JWT wäre Follow-up.
+- **Token in URL:** Query-Parameter-Auth ist ein bekanntes Security-Antipattern (Token in Logs/URLs). Akzeptabel für Single-User + Tailscale. Follow-up: `Sec-WebSocket-Protocol` Header als sicherere Alternative.
 - **Metrics Granularity:** v1 nur Basis-Metriken. Histogramme (Request-Latency, Tool-Duration) als Follow-up.

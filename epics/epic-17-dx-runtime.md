@@ -12,7 +12,21 @@ Die drei größten DX-Schulden aus dem Audit beseitigen: Zwei parallele Agent Lo
 
 ### Task 17.1: `consolidate-agent-loops` — CoreAgentLoop und AgentLoop zusammenführen
 
-**Beschreibung:** Aktuell existieren zwei Agent Loop Implementierungen: `CoreAgentLoop` (372 LOC, Basic) und `AgentLoop` (383 LOC, mit Git-Integration). Das ist verwirrend und führt zu Divergenz. Lösung: Ein einziger `AgentLoop` mit optionaler Git-Integration via Config/Feature-Flags.
+**Beschreibung:** Aktuell existieren zwei Agent Loop Implementierungen: `CoreAgentLoop` (372 LOC, Basic) und `AgentLoop` (383 LOC, mit Git-Integration). Das ist verwirrend und führt zu Divergenz. Lösung: Ein einziger `AgentLoop` mit Lifecycle-Hooks. Git-Integration wird als opt-in Observer über Hooks realisiert, nicht als Feature-Flag im Loop selbst.
+
+**Design-Entscheidung: Lifecycle-Hooks statt Feature-Flag**
+
+Statt `gitIntegration: boolean` im Loop → Git als Hook-basierter Observer:
+
+```typescript
+interface AgentLoopHooks {
+  onBeforeRun?: (session: Session) => Promise<void>;   // → z.B. Worktree init
+  onAfterStep?: (step: ToolResult) => Promise<void>;   // → z.B. Auto-commit
+  onAfterRun?: (result: RunResult) => Promise<void>;   // → z.B. Branch cleanup
+}
+```
+
+Das hält den Loop sauber und macht Git zu einem opt-in Observer — aligned mit der Event Bus Philosophie (Hooks = synchrone Events). Andere Concerns (Logging, Metrics) können dieselben Hooks nutzen.
 
 **Dateien erstellt/geändert:**
 - `src/runtime/agent-loop.ts` (Hauptimplementierung — Git-Features optional)
@@ -21,13 +35,15 @@ Die drei größten DX-Schulden aus dem Audit beseitigen: Zwei parallele Agent Lo
 - `src/runtime/__tests__/agent-loop-consolidated.test.ts` (neu)
 
 **Acceptance Criteria:**
-- Ein einziger `AgentLoop` mit Config-Option `gitIntegration: boolean` (default: false)
-- Wenn `gitIntegration: false`: Verhält sich wie bisheriger CoreAgentLoop
-- Wenn `gitIntegration: true`: Worktree-Init, Branch-Guards, Auto-Commit (bisheriger AgentLoop)
+- Ein einziger `AgentLoop` mit optionalen Lifecycle-Hooks (`onBeforeRun`, `onAfterStep`, `onAfterRun`)
+- Ohne Hooks: Verhält sich wie bisheriger CoreAgentLoop (reiner LLM-Loop)
+- Mit Git-Hooks: Worktree-Init (`onBeforeRun`), Auto-Commit (`onAfterStep`), Branch-Cleanup (`onAfterRun`)
+- Git-Hooks als fertige Factory-Funktion: `createGitHooks(config)` → `AgentLoopHooks`
+- Hooks sind generisch — nicht nur für Git, auch für Logging, Metrics, Custom-Observer nutzbar
 - `CoreAgentLoop` als deprecated Re-Export oder entfernt (Design-Entscheidung im Task)
 - Alle bestehenden Tests (Unit + E2E) bleiben grün
 - Keine Verhaltensänderung für existierende Codepfade
-- Mindestens 6 Tests: Basic Loop ohne Git, Loop mit Git, Config-Toggle, Feature-Flag-Verhalten
+- Mindestens 8 Tests: Basic Loop ohne Hooks, Loop mit Git-Hooks, Custom-Hooks, Hook-Error-Handling, createGitHooks Factory
 - `npx tsc --noEmit` + `npm run test` + `npm run test:e2e` grün
 
 **Komplexität:** M  
@@ -102,10 +118,11 @@ Wave 2 (sequentiell, nach 17.1):
 - Nur noch ein Agent Loop (oder CoreAgentLoop als deprecated Alias)
 - `workbench auth` funktioniert end-to-end
 - `workbench fix-tests` / `review` / `refactor` / `docs` führen echte Agent-Runs aus
-- Mindestens 22 neue Tests (6 + 8 + 8)
+- Mindestens 24 neue Tests (8 + 8 + 8)
 - Workflow-Events werden emittiert
 
 ## Offene Fragen / Risiken
 - **Agent Loop Consolidation:** Breaking Change für Code der `CoreAgentLoop` direkt importiert. Mitigation: Re-Export als Alias beibehalten, deprecation warning.
+- **Hook-Granularity:** `onAfterStep` feuert nach JEDEM Tool-Call — bei 50-Step Runs sind das 50 Git-Commits. Mitigation: Git-Hook kann intern debouncing/batching implementieren.
 - **Workflow Runner + LLM:** Integration-Tests brauchen Mock-Server. Kann die bestehende E2E-Infra (Epic 10) nutzen.
 - **Auth-Flow UX:** PKCE Server-Side Flow heißt der User muss in die Anthropic Console und Tokens manuell kopieren. Langfristig: lokaler HTTP-Callback-Server für automatischen Token-Empfang (Scope dieses Epics: nur Paste-Flow).
