@@ -57,7 +57,7 @@ describe('Mock Anthropic Server', () => {
 
       // Assert: server.calls has 1 entry
       expect(server.calls).toHaveLength(1);
-      expect(server.calls[0]).toMatchObject({
+      expect((server.calls[0] as any).body).toMatchObject({
         model: 'claude-sonnet-4-20250514',
         messages: [
           {
