@@ -6,7 +6,7 @@ import type { Command } from 'commander';
 
 // Mock createDashboard to avoid actually starting the server in tests
 vi.mock('../../dashboard/create-dashboard.js', () => ({
-  createDashboard: vi.fn((config) => {
+  createDashboard: vi.fn(async (config) => {
     // Mock dashboard instance
     return {
       server: {
@@ -77,7 +77,7 @@ describe('Dashboard Command', () => {
     expect(createDashboard).toHaveBeenCalledWith({});
     
     // Verify start was called
-    const mockDashboard = (createDashboard as ReturnType<typeof vi.fn>).mock.results[0].value;
+    const mockDashboard = await (createDashboard as ReturnType<typeof vi.fn>).mock.results[0].value;
     expect(mockDashboard.start).toHaveBeenCalled();
 
     // Verify success messages
@@ -97,7 +97,7 @@ describe('Dashboard Command', () => {
     expect(createDashboard).toHaveBeenCalledWith({ port: 8080 });
     
     // Verify start was called
-    const mockDashboard = (createDashboard as ReturnType<typeof vi.fn>).mock.results[0].value;
+    const mockDashboard = await (createDashboard as ReturnType<typeof vi.fn>).mock.results[0].value;
     expect(mockDashboard.start).toHaveBeenCalled();
   });
 
@@ -124,7 +124,7 @@ describe('Dashboard Command', () => {
     // Clear previous mocks
     vi.clearAllMocks();
     
-    const dashboard = createDashboard({ port: 4000 });
+    const dashboard = await createDashboard({ port: 4000 });
 
     // Verify instance structure
     expect(dashboard).toHaveProperty('server');
