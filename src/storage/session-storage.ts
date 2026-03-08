@@ -13,7 +13,8 @@ export class SessionStorage {
   private baseDir: string;
 
   constructor(baseDir?: string) {
-    this.baseDir = baseDir ?? path.join(homedir(), '.workbench', 'sessions');
+    const workbenchHome = process.env.WORKBENCH_HOME ?? path.join(homedir(), '.workbench');
+    this.baseDir = baseDir ?? path.join(workbenchHome, 'sessions');
   }
 
   /**
