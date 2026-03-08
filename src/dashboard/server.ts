@@ -30,7 +30,7 @@ interface HealthResponse {
  * @param config - Dashboard configuration
  * @returns Configured Fastify instance
  */
-export function createServer(config: DashboardConfig = {}): FastifyInstance {
+export async function createServer(config: DashboardConfig = {}): Promise<FastifyInstance> {
   const resolvedConfig = getDashboardConfig(config);
 
   const fastify = Fastify({
@@ -40,12 +40,12 @@ export function createServer(config: DashboardConfig = {}): FastifyInstance {
   });
 
   // Register CORS plugin
-  fastify.register(cors, {
+  await fastify.register(cors, {
     origin: resolvedConfig.corsOrigin,
   });
 
   // Register WebSocket plugin
-  fastify.register(websocket);
+  await fastify.register(websocket);
 
   // Health check endpoint
   fastify.get<{ Reply: HealthResponse }>('/health', async (_request, reply) => {

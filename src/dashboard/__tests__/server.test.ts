@@ -16,7 +16,7 @@ describe('Dashboard Server', () => {
 
   describe('Health Endpoint', () => {
     it('should respond with status ok and uptime', async () => {
-      server = createServer();
+      server = await createServer();
       await server.ready();
 
       const response = await server.inject({
@@ -35,7 +35,7 @@ describe('Dashboard Server', () => {
     });
 
     it('should increment uptime between calls', async () => {
-      server = createServer();
+      server = await createServer();
       await server.ready();
 
       const response1 = await server.inject({
@@ -60,7 +60,7 @@ describe('Dashboard Server', () => {
   describe('Configuration', () => {
     it('should use default configuration', async () => {
       const config: DashboardConfig = {};
-      server = createServer(config);
+      server = await createServer(config);
       await server.ready();
 
       // Verify server is created successfully with defaults
@@ -80,7 +80,7 @@ describe('Dashboard Server', () => {
         corsOrigin: 'https://example.com',
       };
 
-      server = createServer(config);
+      server = await createServer(config);
       await server.ready();
 
       expect(server).toBeDefined();
@@ -95,7 +95,7 @@ describe('Dashboard Server', () => {
 
   describe('Server Lifecycle', () => {
     it('should start and stop server successfully', async () => {
-      server = createServer({ port: 3001 });
+      server = await createServer({ port: 3001 });
 
       // Start server
       await startServer(server, { port: 3001 });
@@ -109,7 +109,7 @@ describe('Dashboard Server', () => {
 
   describe('CORS Headers', () => {
     it('should include CORS headers in response', async () => {
-      server = createServer({ corsOrigin: '*' });
+      server = await createServer({ corsOrigin: '*' });
       await server.ready();
 
       const response = await server.inject({
@@ -126,7 +126,7 @@ describe('Dashboard Server', () => {
 
     it('should respect custom CORS origin', async () => {
       const customOrigin = 'https://custom-origin.com';
-      server = createServer({ corsOrigin: customOrigin });
+      server = await createServer({ corsOrigin: customOrigin });
       await server.ready();
 
       const response = await server.inject({
