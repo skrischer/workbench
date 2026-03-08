@@ -33,7 +33,7 @@ function getStatusColor(status: RunLog['metadata']['status']): string {
  */
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { data: initialRun, loading, error } = useApi<RunLog>(`/api/runs/${id}`);
+  const { data: initialRun, loading, error } = useApi<RunLog>(`/runs/${id}`);
   const { connected, subscribe } = useWebSocket();
 
   // Local state for live updates
