@@ -191,6 +191,36 @@ Siehe `tech_stack.md` für Implementierungsdetails.
 
 ------------------------------------------------------------------------
 
+## Tool Execution Pipeline
+
+Tools sind pure Functions: `name`, `description`, `input_schema`, `execute()`.
+Keine Cross-Cutting-Logik in Tools selbst.
+
+Validation, Permissions, Cancellation und Event-Publishing leben als
+Middleware-Stufen im Agent Loop:
+
+    executeTool(tool, input, context):
+      validate(input, tool.schema)
+      checkPermissions(input, context)
+      result = tool.execute(input, context)
+      publishEvent('tool:end', result)
+
+Jede Stufe kann einen Fehler als `ToolResult` zurückgeben, ohne dass
+nachfolgende Stufen oder das Tool selbst ausgeführt werden.
+
+Cross-Cutting Concerns werden über ein generisches Context-Object
+an Tools weitergereicht:
+
+    ToolContext
+    - signal (AbortSignal für Cancellation)
+    - permissions (PermissionGuard für Pfad-Zugriff)
+    - eventBus (Event-Publishing)
+
+Tools, die den Context nicht benötigen, ignorieren ihn. Der Agent Loop
+ist der einzige Ort, an dem Middleware-Logik lebt.
+
+------------------------------------------------------------------------
+
 ## Multi-Agent Architecture
 
 Multi-Agent ist kein neues Primitive, sondern Komposition bestehender
