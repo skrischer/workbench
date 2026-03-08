@@ -287,3 +287,51 @@ Phase 0 (Bootstrap)
 - Architektur-Prinzipien: siehe `architecture_principles.md`
 - OAuth-Flow: siehe `anthropic-oauth-provider.md`
 - Git-Workflow: siehe `dev-pipeline.md`
+
+---
+
+## Phase 10 — E2E Testing & Integration Validation
+
+**Ziel:** End-to-End Tests für alle Kernpfade. Validiert, dass die in Phase 0–9 implementierten Komponenten korrekt zusammenarbeiten. Automatische Qualitätssicherung jenseits von Unit Tests.
+
+Phase 10 läuft quer zu allen vorherigen Phasen — sie deckt Integrationsfehler auf, die Unit Tests prinzipbedingt nicht finden (Auth-Header-Format, URL-Prefixes, Token-Flow, Multi-Turn Agent Loop).
+
+### Epic 10: E2E Test-Infrastruktur (`e2e-test-infra`)
+- Mock Anthropic Server (Fastify-basiert, freier Port)
+- CLI Test Runner (Child Process Spawning)
+- Fixture System (handgeschriebene LLM-Responses, kein Record&Replay)
+- Isolierte Test-Umgebung (Temp Dirs, Token Fixtures)
+- Separater Vitest Config (`vitest.config.e2e.ts`)
+
+**Abhängigkeiten:** Keine
+
+### Epic 11: E2E Smoke + CLI Tests (`e2e-smoke-cli`)
+- Smoke Test (Build → Run → Auth → Response)
+- Alle CLI-Commands: run, plan, plans, run-plan, dashboard, workflows
+- **Fix-while-Testing:** Gefundene Bugs werden im selben PR gefixt
+- Regressionstests für bekannte Bugs (Auth-Header, API-Prefix)
+
+**Abhängigkeiten:** Epic 10
+
+### Epic 12: E2E Agent Loop Tests (`e2e-agent-loop`)
+- Single/Multi-Step Tool Use
+- Error Recovery (Tool-Fehler → Agent reagiert)
+- Max-Steps Limit
+- Session Persistence
+
+**Abhängigkeiten:** Epic 10, Epic 11 (Smoke)
+
+### Epic 13: E2E Dashboard Tests (`e2e-dashboard`)
+- REST API Endpoints (Fastify inject)
+- WebSocket Event Bridge
+- Frontend Component Rendering (@testing-library/react)
+
+**Abhängigkeiten:** Epic 10
+
+**Parallelisierbar:** Epic 11 ∥ Epic 13 (nach Epic 10). Epic 12 nach Epic 11.
+
+**Erfolgskriterium Phase 10:**
+```
+npm run test:e2e
+```
+Alle E2E-Tests grün. Smoke Test, CLI Commands, Agent Loop und Dashboard funktionieren end-to-end mit gemocktem LLM.
