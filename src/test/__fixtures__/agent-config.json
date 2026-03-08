@@ -1,0 +1,22 @@
+{
+  "name": "test-agent",
+  "model": "claude-sonnet-4-20250514",
+  "maxTokens": 4096,
+  "systemPrompt": "You are a helpful test assistant.",
+  "tools": [
+    {
+      "name": "read_file",
+      "description": "Read contents of a file",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path to the file"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ]
+}

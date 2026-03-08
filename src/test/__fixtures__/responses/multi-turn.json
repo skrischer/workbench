@@ -1,0 +1,46 @@
+[
+  {
+    "id": "msg_test_004",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "Let me check that file."
+      },
+      {
+        "type": "tool_use",
+        "id": "toolu_test_003",
+        "name": "read_file",
+        "input": {
+          "path": "data.json"
+        }
+      }
+    ],
+    "model": "claude-sonnet-4-20250514",
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 15,
+      "output_tokens": 25
+    }
+  },
+  {
+    "id": "msg_test_005",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "Based on the file contents, the data shows 3 active users."
+      }
+    ],
+    "model": "claude-sonnet-4-20250514",
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 40,
+      "output_tokens": 20
+    }
+  }
+]
