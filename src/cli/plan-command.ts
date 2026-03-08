@@ -71,7 +71,8 @@ export function formatPlanPreview(plan: Plan): string {
 export async function planCommand(prompt: string, options: PlanCommandOptions): Promise<void> {
   try {
     // 1. Create TokenStorage
-    const tokenPath = path.join(homedir(), '.workbench', 'tokens.json');
+    const workbenchHome = process.env.WORKBENCH_HOME ?? path.join(homedir(), '.workbench');
+    const tokenPath = path.join(workbenchHome, 'tokens.json');
     const tokenStorage = new TokenStorage(tokenPath);
 
     // 2. Create TokenRefresher
@@ -92,7 +93,10 @@ export async function planCommand(prompt: string, options: PlanCommandOptions): 
 
     // 3. Create AnthropicClient
     const model = options.model ?? 'claude-3-5-sonnet-20241022';
-    const anthropicClient = new AnthropicClient(tokenRefresher, { model });
+    const anthropicClient = new AnthropicClient(tokenRefresher, {
+      model,
+      apiUrl: process.env.ANTHROPIC_API_URL,
+    });
 
     // 4. Create PlanGenerator
     const planGenerator = new PlanGenerator({

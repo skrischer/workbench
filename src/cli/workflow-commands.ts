@@ -264,6 +264,104 @@ function createWorkflowsCommand(): Command {
 }
 
 /**
+ * Create the 'workflow' parent command with 'list' and 'run' subcommands.
+ */
+function createWorkflowCommand(): Command {
+  const cmd = new Command('workflow');
+  
+  cmd.description('Manage and run workflows');
+  
+  // Subcommand: workflow list
+  const listCmd = new Command('list')
+    .description('List all available workflows')
+    .action(() => {
+      try {
+        const registry = createRegistry();
+        const runner = new WorkflowRunner(registry);
+        
+        const workflows = runner.listWorkflows();
+        
+        console.log('');
+        console.log('📋 Available Workflows:');
+        console.log('─────────────────────────────────────────');
+        console.log('');
+        
+        workflows.forEach(workflow => {
+          console.log(`🔧 ${workflow.id}`);
+          console.log(`   Name: ${workflow.name}`);
+          console.log(`   Description: ${workflow.description}`);
+          console.log('');
+        });
+        
+        console.log(`Total: ${workflows.length} workflows`);
+        console.log('');
+        
+        process.exit(0);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`❌ Error: ${message}`);
+        process.exit(1);
+      }
+    });
+  
+  // Subcommand: workflow run
+  const runCmd = new Command('run')
+    .description('Run a specific workflow')
+    .argument('<workflow-id>', 'ID of the workflow to run')
+    .option('--params <json>', 'Workflow parameters as JSON string')
+    .action(async (workflowId: string, options: { params?: string }) => {
+      try {
+        const registry = createRegistry();
+        const runner = new WorkflowRunner(registry);
+        
+        // Check if workflow exists
+        const workflows = runner.listWorkflows();
+        const workflowExists = workflows.some(w => w.id === workflowId);
+        
+        if (!workflowExists) {
+          console.error(`❌ Error: Workflow '${workflowId}' not found`);
+          console.error('');
+          console.error('Available workflows:');
+          workflows.forEach(w => {
+            console.error(`  - ${w.id}`);
+          });
+          process.exit(1);
+        }
+        
+        // Parse params if provided
+        let params = {};
+        if (options.params) {
+          try {
+            params = JSON.parse(options.params);
+          } catch (error) {
+            console.error(`❌ Error: Invalid JSON in --params`);
+            process.exit(1);
+          }
+        }
+        
+        const input: WorkflowInput = {
+          workflowId,
+          params,
+        };
+        
+        const result = await runner.run(input);
+        console.log(formatResult(result));
+        
+        process.exit(result.status === 'completed' ? 0 : 1);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`❌ Error: ${message}`);
+        process.exit(1);
+      }
+    });
+  
+  cmd.addCommand(listCmd);
+  cmd.addCommand(runCmd);
+  
+  return cmd;
+}
+
+/**
  * Create all workflow-related commands.
  * 
  * @returns Array of Commander.js Command instances
@@ -275,5 +373,6 @@ export function createWorkflowCommands(): Command[] {
     createRefactorCommand(),
     createDocsCommand(),
     createWorkflowsCommand(),
+    createWorkflowCommand(), // New nested workflow command
   ];
 }

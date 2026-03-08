@@ -6,10 +6,15 @@ export interface MockResponse {
   status?: number;
 }
 
+export interface MockCall {
+  body: Record<string, unknown>;
+  headers: Record<string, string | string[] | undefined>;
+}
+
 export interface MockAnthropicServer {
   url: string;
   port: number;
-  calls: Record<string, unknown>[];
+  calls: MockCall[];
   close: () => Promise<void>;
 }
 
@@ -18,11 +23,14 @@ export async function createMockAnthropicServer(
 ): Promise<MockAnthropicServer> {
   const app: FastifyInstance = Fastify();
   let callIndex = 0;
-  const calls: Record<string, unknown>[] = [];
+  const calls: MockCall[] = [];
 
   app.post('/v1/messages', async (req, reply) => {
     const body = req.body as Record<string, unknown>;
-    calls.push(body);
+    calls.push({
+      body,
+      headers: req.headers,
+    });
 
     // Find matching response or use FIFO
     const mock = responses.find(r => r.match?.(body)) ?? responses[callIndex++];
