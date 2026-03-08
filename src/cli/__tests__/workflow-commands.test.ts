@@ -14,7 +14,7 @@ describe('createWorkflowCommands', () => {
     const commands = createWorkflowCommands();
     
     expect(commands).toBeInstanceOf(Array);
-    expect(commands.length).toBe(5);
+    expect(commands.length).toBe(6);
     
     // Verify command names
     const commandNames = commands.map(cmd => cmd.name());
