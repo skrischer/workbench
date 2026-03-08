@@ -3,7 +3,7 @@
   "gh_repo": "skrischer/workbench",
   "base_branch": "develop",
   "worktree_base": "/tmp/workbench-worktrees",
-  "dod": ["npx tsc --noEmit", "npm test", "npm run build"],
+  "dod": ["npx tsc --noEmit", "npm test", "npm run test:e2e", "npm run build"],
   "coder_context": "TypeScript ESM project (Node.js 22+). Uses vitest for tests. Strict mode enabled. Module resolution: NodeNext. All imports need .js extension. Existing types in src/types/index.ts. Tools go in src/tools/. Follow the Tool interface pattern from architecture_principles.md.",
   "reviewer_focus": ["TypeScript strict compliance", "ESM imports (.js extensions)", "Error handling", "Input validation"]
 }

@@ -10,6 +10,7 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "vitest run --config vitest.config.e2e.ts",
     "dev": "tsc --watch",
     "check": "tsc --noEmit"
   },
