@@ -115,7 +115,8 @@ export async function runCommand(prompt: string, options: RunCommandOptions): Pr
     }
 
     // 2. Create TokenStorage (default path: ~/.workbench/tokens.json)
-    const tokenPath = path.join(homedir(), '.workbench', 'tokens.json');
+    const workbenchHome = process.env.WORKBENCH_HOME ?? path.join(homedir(), '.workbench');
+    const tokenPath = path.join(workbenchHome, 'tokens.json');
     const tokenStorage = new TokenStorage(tokenPath);
 
     // 3. Create TokenRefresher
@@ -138,6 +139,7 @@ export async function runCommand(prompt: string, options: RunCommandOptions): Pr
     // 4. Create AnthropicClient
     const anthropicClient = new AnthropicClient(tokenRefresher, {
       model: agentConfig.model,
+      apiUrl: process.env.ANTHROPIC_API_URL,
     });
 
     // 5. Create ToolRegistry with default tools (wrapped with logging)
