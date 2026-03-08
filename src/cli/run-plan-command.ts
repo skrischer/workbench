@@ -32,7 +32,8 @@ export interface RunPlanCommandOptions {
 export async function runPlanCommand(planId: string, options: RunPlanCommandOptions): Promise<void> {
   try {
     // 1. Create dependencies
-    const tokenPath = path.join(homedir(), '.workbench', 'tokens.json');
+    const workbenchHome = process.env.WORKBENCH_HOME ?? path.join(homedir(), '.workbench');
+    const tokenPath = path.join(workbenchHome, 'tokens.json');
     const tokenStorage = new TokenStorage(tokenPath);
 
     let tokenRefresher: TokenRefresher;
@@ -51,7 +52,10 @@ export async function runPlanCommand(planId: string, options: RunPlanCommandOpti
     }
 
     const model = options.model ?? 'claude-3-5-sonnet-20241022';
-    const anthropicClient = new AnthropicClient(tokenRefresher, { model });
+    const anthropicClient = new AnthropicClient(tokenRefresher, {
+      model,
+      apiUrl: process.env.ANTHROPIC_API_URL,
+    });
     const toolRegistry = createDefaultTools();
     const sessionStorage = new SessionStorage();
     const planStorage = new PlanStorage();
