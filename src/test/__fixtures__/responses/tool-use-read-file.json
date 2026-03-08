@@ -1,0 +1,26 @@
+{
+  "id": "msg_test_002",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "Let me read that file for you."
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_test_001",
+      "name": "read_file",
+      "input": {
+        "path": "test-file.txt"
+      }
+    }
+  ],
+  "model": "claude-sonnet-4-20250514",
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 20,
+    "output_tokens": 30
+  }
+}

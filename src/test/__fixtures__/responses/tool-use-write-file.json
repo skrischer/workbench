@@ -1,0 +1,27 @@
+{
+  "id": "msg_test_003",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "I'll write that content to the file now."
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_test_002",
+      "name": "write_file",
+      "input": {
+        "path": "output.txt",
+        "content": "Hello, World!"
+      }
+    }
+  ],
+  "model": "claude-sonnet-4-20250514",
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 25,
+    "output_tokens": 35
+  }
+}

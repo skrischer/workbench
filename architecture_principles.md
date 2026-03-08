@@ -191,6 +191,36 @@ Siehe `tech_stack.md` für Implementierungsdetails.
 
 ------------------------------------------------------------------------
 
+## Tool Execution Pipeline
+
+Tools sind pure Functions: `name`, `description`, `input_schema`, `execute()`.
+Keine Cross-Cutting-Logik in Tools selbst.
+
+Validation, Permissions, Cancellation und Event-Publishing leben als
+Middleware-Stufen im Agent Loop:
+
+    executeTool(tool, input, context):
+      validate(input, tool.schema)
+      checkPermissions(input, context)
+      result = tool.execute(input, context)
+      publishEvent('tool:end', result)
+
+Jede Stufe kann einen Fehler als `ToolResult` zurückgeben, ohne dass
+nachfolgende Stufen oder das Tool selbst ausgeführt werden.
+
+Cross-Cutting Concerns werden über ein generisches Context-Object
+an Tools weitergereicht:
+
+    ToolContext
+    - signal (AbortSignal für Cancellation)
+    - permissions (PermissionGuard für Pfad-Zugriff)
+    - eventBus (Event-Publishing)
+
+Tools, die den Context nicht benötigen, ignorieren ihn. Der Agent Loop
+ist der einzige Ort, an dem Middleware-Logik lebt.
+
+------------------------------------------------------------------------
+
 ## Multi-Agent Architecture
 
 Multi-Agent ist kein neues Primitive, sondern Komposition bestehender
@@ -321,3 +351,33 @@ einem klar abgegrenzten Verantwortungsbereich. Keine zirkulären
 Abhängigkeiten zwischen Modulen.
 
 Siehe `tech_stack.md` für Framework- und Library-Entscheidungen.
+
+---
+
+## Testing Strategy
+
+### Unit Tests
+- Framework: Vitest
+- Location: Co-located mit Source (`__tests__/` in jedem Modul)
+- Scope: Isolierte Module, keine externen Abhängigkeiten
+- Run: `npm test`
+
+### E2E Tests
+- Framework: Vitest mit separatem Config (`vitest.config.e2e.ts`)
+- Location: `src/test/e2e/`
+- Scope: Kompiliertes CLI-Binary als Black Box
+- Run: `npm run test:e2e`
+
+### E2E Prinzipien
+
+1. **Kein Live-LLM in Tests.** Ein Fastify-basierter Mock-Server simuliert die Anthropic Messages API. Tests sind deterministisch und kostenlos.
+
+2. **Fixture-basiert, nicht Record&Replay.** Handgeschriebene, minimale Response-Fixtures. Wartbar und verständlich. Keine Abhängigkeit von LLM-API-Änderungen.
+
+3. **CLI als Black Box.** E2E-Tests spawnen `workbench <command>` als Child Process. Keine Modul-Imports — getestet wird das kompilierte Artefakt, wie ein User es nutzt.
+
+4. **Isolierte Umgebung.** Jeder Test bekommt ein eigenes Temp-Dir mit Token-Fixtures und Agent-Config. Keine Interferenz mit dem echten `~/.workbench/` Setup.
+
+5. **Fix-while-Testing.** Wenn ein E2E-Test einen Bug aufdeckt, wird er im selben PR gefixt. Der Test IST die Regression. Kein separates Bug-Tracking.
+
+6. **Env-Variable Overrides.** `ANTHROPIC_API_URL` und `WORKBENCH_HOME` erlauben Tests, Mock-Server und Temp-Dir zu nutzen, ohne Produktionscode zu ändern.
