@@ -1,41 +1,65 @@
-// src/runtime/create-runtime.ts — Factory for creating Agent Runtime with Git Integration
+// src/runtime/create-runtime.ts — Factory for creating Agent Runtime
 
-import { AgentLoop, type RuntimeConfig } from './agent-loop.js';
+import { AgentLoop, type AgentLoopHooks } from './agent-loop.js';
+import { createGitHooks, type GitHooksConfig } from './git-hooks.js';
 import { TokenTracker } from './token-tracker.js';
 import { RunLogger } from '../storage/run-logger.js';
 import { TypedEventBus } from '../events/event-bus.js';
-import { DEFAULT_PROTECTED_BRANCHES } from '../git/index.js';
+import type { AnthropicClient } from '../llm/anthropic-client.js';
+import type { SessionStorage } from '../storage/session-storage.js';
+import type { ToolRegistry } from '../tools/registry.js';
+import type { AgentConfig } from '../types/index.js';
 
 /**
- * Create a new Agent Runtime with Git integration, Event Bus, TokenTracker, and RunLogger
+ * Configuration for runtime creation
+ */
+export interface RuntimeConfig {
+  /** Anthropic client for LLM calls */
+  anthropicClient: AnthropicClient;
+  
+  /** Session storage for conversation history */
+  sessionStorage: SessionStorage;
+  
+  /** Tool registry */
+  toolRegistry: ToolRegistry;
+  
+  /** Agent configuration */
+  agentConfig: AgentConfig;
+  
+  /** Optional Git hooks configuration */
+  gitHooks?: GitHooksConfig;
+  
+  /** Optional custom hooks (overrides gitHooks if provided) */
+  customHooks?: AgentLoopHooks;
+}
+
+/**
+ * Create a new Agent Runtime with Event Bus, TokenTracker, and optional Git integration
  * 
  * @param config - Runtime configuration
- * @returns Configured AgentLoop instance (access eventBus, tokenTracker, runLogger via getters)
+ * @returns Configured AgentLoop instance with attached helpers
  * 
  * @example
  * ```ts
  * const runtime = createRuntime({
- *   repoPath: '/path/to/repo',
- *   gitSafety: true,
- *   keepWorktree: false
+ *   anthropicClient: client,
+ *   sessionStorage: storage,
+ *   toolRegistry: registry,
+ *   agentConfig: config,
+ *   gitHooks: {
+ *     repoPath: '/path/to/repo',
+ *     baseBranch: 'main',
+ *     keepWorktree: false
+ *   }
  * });
  * 
- * // Start a run
- * const { tools, worktreePath } = await runtime.start('run-123', undefined, myTools);
+ * // Run the agent
+ * const result = await runtime.run('Hello, world!');
  * 
- * // After tool execution
- * await runtime.afterToolCall('write_file', 'run-123', 0);
- * 
- * // Get diff
- * const diff = await runtime.getDiff('run-123');
- * 
- * // Access event bus, token tracker, or run logger
+ * // Access helpers
  * const eventBus = runtime.getEventBus();
  * const tokenTracker = runtime.getTokenTracker();
  * const runLogger = runtime.getRunLogger();
- * 
- * // Finish and cleanup
- * await runtime.finish('run-123');
  * ```
  */
 export function createRuntime(config: RuntimeConfig): AgentLoop {
@@ -86,16 +110,23 @@ export function createRuntime(config: RuntimeConfig): AgentLoop {
     await runLogger.endRun(runId, 'failed');
   });
 
-  // Provide defaults and inject event bus
-  const fullConfig: RuntimeConfig = {
-    ...config,
-    gitSafety: config.gitSafety ?? true, // Default to true, AgentLoop will disable if no .git
-    keepWorktree: config.keepWorktree ?? false,
-    protectedBranches: config.protectedBranches ?? DEFAULT_PROTECTED_BRANCHES,
-    eventBus,
-  };
+  // Determine hooks
+  let hooks: AgentLoopHooks | undefined;
+  if (config.customHooks) {
+    hooks = config.customHooks;
+  } else if (config.gitHooks) {
+    hooks = createGitHooks(config.gitHooks);
+  }
 
-  const runtime = new AgentLoop(fullConfig);
+  // Create AgentLoop
+  const runtime = new AgentLoop(
+    config.anthropicClient,
+    config.sessionStorage,
+    config.toolRegistry,
+    config.agentConfig,
+    eventBus,
+    hooks
+  );
 
   // Attach tokenTracker and runLogger to runtime for easy access
   // Using Object.defineProperty to avoid polluting the class with public properties

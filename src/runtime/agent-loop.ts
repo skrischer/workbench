@@ -1,383 +1,560 @@
-// src/runtime/agent-loop.ts — Agent Runtime Loop with Git Integration
+// src/runtime/agent-loop.ts — Consolidated Agent Runtime Loop with Lifecycle Hooks
 
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import type {
+  AgentConfig,
+  RunResult,
+  LLMMessage,
+  LLMToolDef,
+  LLMUsage,
+  ContentBlock,
+  ToolUseBlock,
+  ToolResultBlock,
+  UserMessage,
+  AssistantMessage,
+  ToolResultMessage,
+  Session,
+  ToolResult,
+  ToolContext,
+} from '../types/index.js';
+import type { AnthropicClient } from '../llm/anthropic-client.js';
+import type { SessionStorage } from '../storage/session-storage.js';
+import type { ToolRegistry } from '../tools/registry.js';
 import type { TypedEventBus } from '../events/event-bus.js';
-import type { TokenTracker } from './token-tracker.js';
-import type { RunLogger } from '../storage/run-logger.js';
-import type { Tool, ToolResult, Message } from '../types/index.js';
-import {
-  WorktreeManager,
-  AutoCommitter,
-  wrapTool,
-  diff,
-  type CreateWorktreeResult,
-} from '../git/index.js';
-import type { LanceDBMemoryStore } from '../memory/lancedb-store.js';
-import { SessionSummarizer, type LLMCallback } from '../memory/session-summarizer.js';
+import { validateToolInput } from '../tools/validator.js';
+import { PermissionGuard, PermissionError } from '../tools/permissions.js';
 
 /**
- * Configuration for the Agent Runtime
+ * Lifecycle hooks for agent runs
+ * Enables extensibility without modifying core loop logic
  */
-export interface RuntimeConfig {
-  /** Path to the git repository */
-  repoPath: string;
-  /** Enable git safety features (default: true if .git exists) */
-  gitSafety?: boolean;
-  /** Keep worktree after run finishes (default: false) */
-  keepWorktree?: boolean;
-  /** Protected branch patterns (default: ['main', 'master', 'develop', ...]) */
-  protectedBranches?: string[];
-  /** Base directory for worktrees (optional) */
-  worktreeBaseDir?: string;
-  /** Event bus for runtime events (optional) */
-  eventBus?: TypedEventBus;
+export interface AgentLoopHooks {
+  /** Called before run starts (after session creation) */
+  onBeforeRun?: (session: Session) => Promise<void>;
+  
+  /** Called after each tool execution */
+  onAfterStep?: (step: ToolResult, context: { runId: string; stepIndex: number; toolName: string }) => Promise<void>;
+  
+  /** Called after run completes (success or failure) */
+  onAfterRun?: (result: RunResult, context: { runId: string }) => Promise<void>;
 }
 
 /**
- * Runtime state for a run
- */
-interface RunState {
-  runId: string;
-  worktree?: CreateWorktreeResult;
-  baseBranch: string;
-}
-
-/**
- * AgentLoop - Manages the runtime loop for agent execution with Git integration
+ * AgentLoop — Core agent runtime loop with optional lifecycle hooks
+ * 
+ * Orchestrates the agent execution cycle:
+ * 1. Creates a session
+ * 2. Calls onBeforeRun hook (if provided)
+ * 3. Sends messages to LLM
+ * 4. Executes tool calls
+ * 5. Calls onAfterStep hook after each tool execution (if provided)
+ * 6. Repeats until completion or max steps
+ * 7. Calls onAfterRun hook (if provided)
+ * 
+ * Without hooks, behaves like a pure LLM loop.
+ * With hooks, enables Git integration, logging, metrics, custom observers, etc.
  */
 export class AgentLoop {
-  private config: RuntimeConfig;
-  private worktreeManager: WorktreeManager;
-  private autoCommitter: AutoCommitter;
-  private activeRuns: Map<string, RunState> = new Map();
-  private gitEnabled: boolean;
-  private eventBus?: TypedEventBus;
-  private autoSummaryStore?: LanceDBMemoryStore;
-  private autoSummaryCallback?: LLMCallback;
-  private summarizer?: SessionSummarizer;
+  private activeControllers: Map<string, AbortController> = new Map();
+  private permissionGuard?: PermissionGuard;
 
-  constructor(config: RuntimeConfig) {
-    this.config = config;
-    this.eventBus = config.eventBus;
-    this.worktreeManager = new WorktreeManager(config.worktreeBaseDir);
-    this.autoCommitter = new AutoCommitter();
-
-    // Determine if git safety should be enabled
-    this.gitEnabled = this.shouldEnableGit();
+  constructor(
+    private anthropicClient: AnthropicClient,
+    private sessionStorage: SessionStorage,
+    private toolRegistry: ToolRegistry,
+    private config: AgentConfig,
+    private eventBus?: TypedEventBus,
+    private hooks?: AgentLoopHooks
+  ) {
+    // Initialize permission guard if allowedPaths are configured
+    if (config.allowedPaths && config.allowedPaths.length > 0) {
+      this.permissionGuard = new PermissionGuard(config.allowedPaths);
+    }
   }
 
   /**
-   * Check if git safety should be enabled
+   * Run the agent with a user prompt
+   * @param prompt - User input to process
+   * @returns RunResult with session ID, steps taken, final response, and status
    */
-  private shouldEnableGit(): boolean {
-    // If explicitly disabled, respect that
-    if (this.config.gitSafety === false) {
-      return false;
-    }
-
-    // If explicitly enabled but no .git directory, disable gracefully
-    const gitDir = resolve(this.config.repoPath, '.git');
-    if (!existsSync(gitDir)) {
-      if (this.config.gitSafety === true) {
-        console.warn(
-          `[AgentLoop] Git safety requested but .git not found at ${gitDir}. Disabling git features.`
-        );
-      }
-      return false;
-    }
-
-    // Default: enable if .git exists
-    return true;
-  }
-
-  /**
-   * Start a new run with git integration
-   * @param runId - Unique run identifier
-   * @param repoPath - Path to repository (overrides config if provided)
-   * @param tools - Array of tools to wrap with branch guards
-   * @param options - Additional options
-   * @returns Wrapped tools and worktree info
-   */
-  async start(
-    runId: string,
-    repoPath?: string,
-    tools: Tool[] = [],
-    options?: { baseBranch?: string }
-  ): Promise<{
-    tools: Tool[];
-    worktreePath?: string;
-    branchName?: string;
-  }> {
-    const actualRepoPath = repoPath || this.config.repoPath;
-    let baseBranch = options?.baseBranch || 'HEAD';
-
-    // Resolve HEAD to actual branch name if needed
-    if (this.gitEnabled && baseBranch === 'HEAD') {
-      const { getCurrentBranch } = await import('../git/index.js');
-      const branchResult = getCurrentBranch(actualRepoPath);
-      if (branchResult.success && branchResult.data) {
-        baseBranch = branchResult.data;
-      }
-    }
-
-    // If git is disabled, return tools as-is
-    if (!this.gitEnabled) {
-      this.activeRuns.set(runId, { runId, baseBranch });
-      return { tools };
-    }
-
-    // Create worktree
-    const worktreeResult = this.worktreeManager.createForRun(runId, actualRepoPath, baseBranch);
-
-    if (!worktreeResult.success) {
-      throw new Error(`Failed to create worktree: ${worktreeResult.error}`);
-    }
-
-    const worktree = worktreeResult.data!;
-
-    // Store run state
-    this.activeRuns.set(runId, {
+  async run(prompt: string): Promise<RunResult> {
+    // 1. Create session
+    const session = await this.sessionStorage.create('agent-runtime');
+    const runId = session.id;
+    
+    // Create AbortController for this run
+    const abortController = new AbortController();
+    this.activeControllers.set(runId, abortController);
+    
+    // Emit run:start event
+    this.eventBus?.emit('run:start', {
       runId,
-      worktree,
-      baseBranch,
+      agentConfig: this.config,
+      prompt,
     });
-
-    // Wrap tools with branch guards (pass worktree path as cwd)
-    const wrappedTools = tools.map((tool) =>
-      wrapTool(tool, {
-        enabled: true,
-        protectedBranches: this.config.protectedBranches,
-        cwd: worktree.worktreePath,
-      })
-    );
-
-    return {
-      tools: wrappedTools,
-      worktreePath: worktree.worktreePath,
-      branchName: worktree.branchName,
+    
+    // 2. Add initial user message
+    const userMessage: UserMessage = {
+      role: 'user',
+      content: prompt,
+      timestamp: new Date().toISOString(),
     };
-  }
+    await this.sessionStorage.addMessage(session.id, userMessage);
 
-  /**
-   * Hook to call after a tool execution - creates auto-commit
-   * @param toolName - Name of the tool that was executed
-   * @param runId - Run identifier
-   * @param stepIndex - Step index in the run
-   * @returns Commit hash or null if no changes
-   */
-  async afterToolCall(toolName: string, runId: string, stepIndex: number): Promise<string | null> {
-    // If git is disabled, skip
-    if (!this.gitEnabled) {
-      return null;
-    }
-
-    const runState = this.activeRuns.get(runId);
-    if (!runState) {
-      throw new Error(`No active run found for runId: ${runId}`);
-    }
-
-    // If no worktree, skip
-    if (!runState.worktree) {
-      return null;
-    }
-
-    // Create auto-commit
-    const commitResult = await this.autoCommitter.commitAfterTool(
-      toolName,
-      runId,
-      stepIndex,
-      runState.worktree.worktreePath
-    );
-
-    if (!commitResult.success) {
-      throw new Error(`Failed to auto-commit: ${commitResult.error}`);
-    }
-
-    return commitResult.data || null;
-  }
-
-  /**
-   * Get diff between agent branch and base branch
-   * @param runId - Run identifier
-   * @returns Diff output or empty string
-   */
-  async getDiff(runId: string): Promise<string> {
-    // If git is disabled, return empty
-    if (!this.gitEnabled) {
-      return '';
-    }
-
-    const runState = this.activeRuns.get(runId);
-    if (!runState) {
-      throw new Error(`No active run found for runId: ${runId}`);
-    }
-
-    // If no worktree, return empty
-    if (!runState.worktree) {
-      return '';
-    }
-
-    // Get diff (from base branch to current HEAD in worktree)
-    // When in worktree, HEAD points to agent branch, so we only pass baseBranch
-    const diffResult = diff(
-      runState.baseBranch,
-      undefined,
-      runState.worktree.worktreePath
-    );
-
-    if (!diffResult.success) {
-      throw new Error(`Failed to get diff: ${diffResult.error}`);
-    }
-
-    return diffResult.data || '';
-  }
-
-  /**
-   * Finish a run and cleanup
-   * @param runId - Run identifier
-   * @returns Cleanup result
-   */
-  async finish(runId: string): Promise<{ removed: boolean; path?: string }> {
-    const runState = this.activeRuns.get(runId);
-    if (!runState) {
-      return { removed: false };
-    }
-
-    // Remove from active runs
-    this.activeRuns.delete(runId);
-
-    // If git is disabled or no worktree, nothing to cleanup
-    if (!this.gitEnabled || !runState.worktree) {
-      return { removed: false };
-    }
-
-    // If keepWorktree is true, don't remove
-    if (this.config.keepWorktree) {
-      return { removed: false, path: runState.worktree.worktreePath };
-    }
-
-    // Cleanup worktree
-    const cleanupResult = this.worktreeManager.cleanup(runId, {
-      deleteBranch: false, // Keep branch for now, can be configurable later
-    });
-
-    if (!cleanupResult.success) {
-      console.warn(`[AgentLoop] Failed to cleanup worktree: ${cleanupResult.error}`);
-      return { removed: false };
-    }
-
-    return { removed: true, path: cleanupResult.data };
-  }
-
-  /**
-   * Check if git safety is enabled
-   */
-  isGitEnabled(): boolean {
-    return this.gitEnabled;
-  }
-
-  /**
-   * Get active run state
-   */
-  getRunState(runId: string): RunState | undefined {
-    return this.activeRuns.get(runId);
-  }
-
-  /**
-   * Get all active run IDs
-   */
-  getActiveRunIds(): string[] {
-    return Array.from(this.activeRuns.keys());
-  }
-
-  /**
-   * Get the event bus instance
-   */
-  getEventBus(): TypedEventBus | undefined {
-    return this.eventBus;
-  }
-
-  /**
-   * Get the token tracker instance (attached by createRuntime)
-   */
-  getTokenTracker(): TokenTracker | undefined {
-    return (this as any)._tokenTracker;
-  }
-
-  /**
-   * Get the run logger instance (attached by createRuntime)
-   */
-  getRunLogger(): RunLogger | undefined {
-    return (this as any)._runLogger;
-  }
-  /**
-   * Enable automatic session summarization after runs.
-   * When enabled, the agent will generate a summary of the session messages
-   * and store it in the memory store after each run finishes.
-   * 
-   * @param store - LanceDB memory store for storing summaries
-   * @param llmCallback - Callback function for generating summaries via LLM
-   * @param config - Optional summarizer configuration
-   */
-  enableAutoSummary(
-    store: LanceDBMemoryStore,
-    llmCallback: LLMCallback,
-    config?: { minMessages?: number; maxTags?: number }
-  ): void {
-    this.autoSummaryStore = store;
-    this.autoSummaryCallback = llmCallback;
-    this.summarizer = new SessionSummarizer(llmCallback, config);
-  }
-
-  /**
-   * Disable automatic session summarization.
-   */
-  disableAutoSummary(): void {
-    this.autoSummaryStore = undefined;
-    this.autoSummaryCallback = undefined;
-    this.summarizer = undefined;
-  }
-
-  /**
-   * Generate and store a summary of session messages.
-   * This is called automatically after each run if auto-summary is enabled.
-   * Can also be called manually for on-demand summarization.
-   * 
-   * @param sessionId - Session identifier
-   * @param messages - Array of session messages to summarize
-   * @returns Summary memory entry or null if not enough messages
-   */
-  async summarizeSession(sessionId: string, messages: Message[]): Promise<string | null> {
-    if (!this.autoSummaryStore || !this.summarizer) {
-      throw new Error('Auto-summary not enabled. Call enableAutoSummary() first.');
-    }
+    // Initialize tracking
+    let step = 0;
+    let status: RunResult['status'] = 'completed';
+    let totalUsage: LLMUsage = {
+      input_tokens: 0,
+      output_tokens: 0,
+    };
+    let finalResponse = '';
 
     try {
-      // Initialize store if needed
-      await this.autoSummaryStore.init();
-
-      // Generate summary
-      const summaryEntry = await this.summarizer.summarize(messages, sessionId);
-
-      if (!summaryEntry) {
-        return null; // Not enough messages
+      // 3. Call onBeforeRun hook
+      if (this.hooks?.onBeforeRun) {
+        const currentSession = await this.sessionStorage.load(session.id);
+        await this.hooks.onBeforeRun(currentSession);
       }
 
-      // Store summary in memory
-      const stored = await this.autoSummaryStore.add(summaryEntry);
+      // 4. Main loop
+      while (step < this.config.maxSteps) {
+        step++;
 
-      return stored.id;
+        // a. Load current session state and convert messages
+        const currentSession = await this.sessionStorage.load(session.id);
+        const llmMessages = this.convertToLLMMessages(currentSession.messages);
+
+        // b. Get tool definitions
+        const tools = this.getToolDefinitions();
+
+        // Emit llm:request event
+        this.eventBus?.emit('llm:request', {
+          runId,
+          model: this.config.model ?? 'unknown',
+          messageCount: llmMessages.length,
+        });
+
+        // c. Send to LLM
+        const response = await this.anthropicClient.sendMessage(
+          llmMessages,
+          tools.length > 0 ? tools : undefined,
+          { system: this.config.systemPrompt }
+        );
+
+        // Track token usage
+        totalUsage.input_tokens += response.usage.input_tokens;
+        totalUsage.output_tokens += response.usage.output_tokens;
+
+        // Emit llm:response event
+        this.eventBus?.emit('llm:response', {
+          runId,
+          model: this.config.model ?? 'unknown',
+          tokenUsage: {
+            inputTokens: response.usage.input_tokens,
+            outputTokens: response.usage.output_tokens,
+          },
+        });
+
+        // d. Save assistant response
+        const assistantContent = this.extractTextContent(response.content);
+        const assistantMessage: AssistantMessage = {
+          role: 'assistant',
+          content: assistantContent,
+          timestamp: new Date().toISOString(),
+        };
+        await this.sessionStorage.addMessage(session.id, assistantMessage);
+
+        // Emit run:step event
+        this.eventBus?.emit('run:step', {
+          runId,
+          stepIndex: step,
+          message: assistantMessage,
+        });
+
+        // e. Handle stop reason
+        if (response.stop_reason === 'end_turn') {
+          status = 'completed';
+          finalResponse = assistantContent;
+          break;
+        }
+
+        if (response.stop_reason === 'tool_use') {
+          // Extract tool use blocks
+          const toolUseBlocks = response.content.filter(
+            (block): block is ToolUseBlock => block.type === 'tool_use'
+          );
+
+          // Execute each tool and collect results
+          for (const toolUse of toolUseBlocks) {
+            // Emit tool:call event
+            this.eventBus?.emit('tool:call', {
+              runId,
+              toolName: toolUse.name,
+              input: toolUse.input,
+              stepIndex: step,
+            });
+
+            // Execute tool and measure duration
+            const startTime = performance.now();
+            const toolResult = await this.executeTool(toolUse, runId);
+            const durationMs = performance.now() - startTime;
+
+            // Emit tool:result event
+            this.eventBus?.emit('tool:result', {
+              runId,
+              toolName: toolUse.name,
+              result: {
+                success: !toolResult.is_error,
+                output: toolResult.content,
+                error: toolResult.is_error ? toolResult.content : undefined,
+              },
+              durationMs,
+            });
+            
+            // Save tool result as message
+            const toolResultMessage: ToolResultMessage = {
+              role: 'tool_result',
+              content: toolResult.content,
+              toolCallId: toolResult.tool_use_id,
+              timestamp: new Date().toISOString(),
+            };
+            await this.sessionStorage.addMessage(session.id, toolResultMessage);
+
+            // 5. Call onAfterStep hook (only for successful tool executions)
+            if (this.hooks?.onAfterStep && !toolResult.is_error) {
+              const stepResult: ToolResult = {
+                success: !toolResult.is_error,
+                output: toolResult.content,
+                error: toolResult.is_error ? toolResult.content : undefined,
+              };
+              try {
+                await this.hooks.onAfterStep(stepResult, {
+                  runId,
+                  stepIndex: step,
+                  toolName: toolUse.name,
+                });
+              } catch (hookError) {
+                // Mark as hook error so it can be re-thrown in the main catch block
+                (hookError as any).__isHookError = true;
+                throw hookError;
+              }
+            }
+          }
+
+          // Save session after tool execution
+          await this.sessionStorage.save(await this.sessionStorage.load(session.id));
+          
+          // ✅ CHECK: Haben wir maxSteps erreicht und sind noch nicht fertig?
+          if (step >= this.config.maxSteps) {
+            status = 'max_steps_reached';
+            // Use last assistant message as final response
+            const currentSession = await this.sessionStorage.load(session.id);
+            const lastAssistantMsg = [...currentSession.messages]
+              .reverse()
+              .find(msg => msg.role === 'assistant');
+            finalResponse = lastAssistantMsg?.content ?? 'Max steps reached without completion';
+            break;
+          }
+          
+          // Continue loop for next LLM call
+          continue;
+        }
+
+        // Other stop reasons (max_tokens, stop_sequence)
+        status = 'completed';
+        finalResponse = assistantContent;
+        break;
+      }
+
+      // 6. Save final session state
+      await this.sessionStorage.save(await this.sessionStorage.load(session.id));
+
+      // Build result
+      const result: RunResult = {
+        sessionId: session.id,
+        steps: step,
+        finalResponse,
+        tokenUsage: totalUsage,
+        status,
+      };
+
+      // 7. Call onAfterRun hook
+      if (this.hooks?.onAfterRun) {
+        await this.hooks.onAfterRun(result, { runId });
+      }
+
+      // Emit run:end event
+      this.eventBus?.emit('run:end', {
+        runId,
+        result: finalResponse,
+        tokenUsage: {
+          inputTokens: totalUsage.input_tokens,
+          outputTokens: totalUsage.output_tokens,
+          totalTokens: totalUsage.input_tokens + totalUsage.output_tokens,
+        },
+      });
+
+      // 8. Return result
+      return result;
+
     } catch (error) {
-      console.error('[AgentLoop] Failed to generate session summary:', error);
-      return null;
+      // Re-throw hook errors instead of catching them
+      if ((error as any).__isHookError) {
+        throw error;
+      }
+      
+      // Handle errors
+      status = 'failed';
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      // Build error result
+      const result: RunResult = {
+        sessionId: session.id,
+        steps: step,
+        finalResponse: `Error: ${errorMessage}`,
+        tokenUsage: totalUsage,
+        status,
+      };
+
+      // Call onAfterRun hook even on failure
+      if (this.hooks?.onAfterRun) {
+        try {
+          await this.hooks.onAfterRun(result, { runId });
+        } catch (hookError) {
+          console.error('[AgentLoop] onAfterRun hook failed:', hookError);
+        }
+      }
+
+      // Emit run:error event
+      this.eventBus?.emit('run:error', {
+        runId,
+        error: errorMessage,
+      });
+      
+      return result;
+    } finally {
+      // Clean up AbortController
+      this.activeControllers.delete(runId);
     }
   }
 
   /**
-   * Check if auto-summary is enabled
+   * Cancel a running agent execution
+   * @param runId - The run ID to cancel
+   * @returns true if the run was found and cancelled, false otherwise
    */
-  isAutoSummaryEnabled(): boolean {
-    return !!this.autoSummaryStore && !!this.summarizer;
+  cancel(runId: string): boolean {
+    const controller = this.activeControllers.get(runId);
+    if (controller) {
+      controller.abort();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Check if a run is currently active
+   * @param runId - The run ID to check
+   * @returns true if the run is active, false otherwise
+   */
+  isRunActive(runId: string): boolean {
+    return this.activeControllers.has(runId);
+  }
+
+  /**
+   * Convert session messages to LLM format
+   */
+  private convertToLLMMessages(messages: Array<{ role: string; content: string; toolCallId?: string }>): LLMMessage[] {
+    const llmMessages: LLMMessage[] = [];
+    const toolResultBuffer: ToolResultBlock[] = [];
+
+    for (const msg of messages) {
+      if (msg.role === 'user') {
+        // Flush any buffered tool results first
+        if (toolResultBuffer.length > 0) {
+          llmMessages.push({
+            role: 'user',
+            content: [...toolResultBuffer],
+          });
+          toolResultBuffer.length = 0;
+        }
+        // Add user message
+        llmMessages.push({
+          role: 'user',
+          content: msg.content,
+        });
+      } else if (msg.role === 'assistant') {
+        // Flush any buffered tool results first
+        if (toolResultBuffer.length > 0) {
+          llmMessages.push({
+            role: 'user',
+            content: [...toolResultBuffer],
+          });
+          toolResultBuffer.length = 0;
+        }
+        // Add assistant message
+        llmMessages.push({
+          role: 'assistant',
+          content: msg.content,
+        });
+      } else if (msg.role === 'tool' || msg.role === 'tool_result') {
+        // Buffer tool results (they get sent as user messages with ToolResultBlock content)
+        toolResultBuffer.push({
+          type: 'tool_result',
+          tool_use_id: msg.toolCallId ?? '',
+          content: msg.content,
+          is_error: msg.content.includes('Error:'), // Simple heuristic
+        });
+      }
+    }
+
+    // Flush remaining tool results
+    if (toolResultBuffer.length > 0) {
+      llmMessages.push({
+        role: 'user',
+        content: [...toolResultBuffer],
+      });
+    }
+
+    return llmMessages;
+  }
+
+  /**
+   * Get tool definitions for LLM
+   */
+  private getToolDefinitions(): LLMToolDef[] {
+    const toolNames = this.config.tools ?? [];
+    const definitions: LLMToolDef[] = [];
+
+    for (const name of toolNames) {
+      const tool = this.toolRegistry.get(name);
+      if (tool) {
+        definitions.push({
+          name: tool.name,
+          description: tool.description,
+          input_schema: tool.inputSchema,
+        });
+      }
+    }
+
+    return definitions;
+  }
+
+  /**
+   * Execute a tool and return the result as ToolResultBlock
+   */
+  private async executeTool(toolUse: ToolUseBlock, runId: string): Promise<ToolResultBlock> {
+    try {
+      const tool = this.toolRegistry.get(toolUse.name);
+      
+      if (!tool) {
+        return {
+          type: 'tool_result',
+          tool_use_id: toolUse.id,
+          content: `Error: Tool "${toolUse.name}" not found in registry`,
+          is_error: true,
+        };
+      }
+
+      // Validate tool input against schema before execution
+      const validation = validateToolInput(tool.inputSchema, toolUse.input as Record<string, unknown>);
+      if (!validation.valid) {
+        return {
+          type: 'tool_result',
+          tool_use_id: toolUse.id,
+          content: `Input validation failed for tool "${toolUse.name}":\n${validation.errors!.join('\n')}`,
+          is_error: true,
+        };
+      }
+
+      // PERMISSION CHECK MIDDLEWARE — Check path permissions before execution
+      if (this.permissionGuard && this.isWritingTool(toolUse.name)) {
+        const targetPath = this.extractTargetPath(toolUse.name, toolUse.input);
+        
+        if (targetPath) {
+          try {
+            this.permissionGuard.checkPath(targetPath);
+          } catch (error) {
+            if (error instanceof PermissionError) {
+              return {
+                type: 'tool_result',
+                tool_use_id: toolUse.id,
+                content: `Permission denied: ${error.message}`,
+                is_error: true,
+              };
+            }
+            throw error; // Re-throw if it's not a PermissionError
+          }
+        }
+      }
+
+      // Build ToolContext with AbortSignal and PermissionGuard
+      const abortController = this.activeControllers.get(runId);
+      const context: ToolContext = {
+        signal: abortController?.signal,
+        permissions: this.permissionGuard,
+        eventBus: this.eventBus,
+        metadata: {
+          runId,
+          toolCallId: toolUse.id,
+        },
+      };
+
+      const result = await tool.execute(toolUse.input, context);
+
+      return {
+        type: 'tool_result',
+        tool_use_id: toolUse.id,
+        content: result.success ? result.output : `Error: ${result.error ?? 'Unknown error'}`,
+        is_error: !result.success,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        type: 'tool_result',
+        tool_use_id: toolUse.id,
+        content: `Error executing tool: ${errorMessage}`,
+        is_error: true,
+      };
+    }
+  }
+
+  /**
+   * Extract text content from ContentBlocks
+   */
+  private extractTextContent(blocks: ContentBlock[]): string {
+    const textBlocks = blocks
+      .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
+      .map(block => block.text);
+    
+    return textBlocks.join('\n');
+  }
+
+  /**
+   * Check if a tool is a writing tool that needs permission checks
+   */
+  private isWritingTool(toolName: string): boolean {
+    // Known writing tools by name
+    const writingTools = [
+      'write_file',
+      'edit_file',
+      'apply_patch',
+      'exec', // exec can modify files via cwd
+    ];
+    
+    return writingTools.includes(toolName);
+  }
+
+  /**
+   * Extract target path from tool input for permission checking
+   */
+  private extractTargetPath(toolName: string, input: Record<string, unknown>): string | null {
+    // Different tools have different path parameters
+    if (toolName === 'exec') {
+      return (input.cwd as string) || null;
+    }
+    
+    // Most file tools use 'path' parameter
+    return (input.path as string) || null;
   }
 }
