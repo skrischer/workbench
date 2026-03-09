@@ -91,11 +91,11 @@ const createMockEventBus = (): TypedEventBus => ({
 } as any);
 
 describe('createWorkflowCommands', () => {
-  it('should return an array with 5 commands', () => {
+  it('should return an array with 10 commands', () => {
     const commands = createWorkflowCommands();
     
     expect(commands).toBeInstanceOf(Array);
-    expect(commands.length).toBe(6);
+    expect(commands.length).toBe(10);
     
     // Verify command names
     const commandNames = commands.map(cmd => cmd.name());
@@ -104,6 +104,13 @@ describe('createWorkflowCommands', () => {
     expect(commandNames).toContain('refactor');
     expect(commandNames).toContain('docs');
     expect(commandNames).toContain('workflows');
+    expect(commandNames).toContain('workflow');
+    expect(commandNames).toContain('chain');
+    
+    // Verify new schedule commands
+    expect(commandNames).toContain('schedule');
+    expect(commandNames).toContain('schedules');
+    expect(commandNames).toContain('unschedule');
   });
   
   it('fix-tests command should have correct options', () => {

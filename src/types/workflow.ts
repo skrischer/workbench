@@ -65,3 +65,96 @@ export interface WorkflowResult {
   /** Execution duration in milliseconds */
   durationMs: number;
 }
+
+/**
+ * Condition for conditional workflow execution in chains.
+ * All conditions are JSON-serializable (declarative rules).
+ */
+export interface WorkflowCondition {
+  /** Match on workflow status */
+  status?: 'completed' | 'failed';
+  /** Match on token usage (less-than/greater-than) */
+  tokenUsage?: {
+    $lt?: number;
+    $gt?: number;
+  };
+  /** Match if output contains this string */
+  outputContains?: string;
+}
+
+/**
+ * A single step in a workflow chain.
+ */
+export interface ChainStep {
+  /** ID of the workflow to execute */
+  workflowId: string;
+  /** Parameters to pass to the workflow */
+  params: Record<string, unknown>;
+  /** Optional condition to determine if this step should run */
+  condition?: WorkflowCondition;
+}
+
+/**
+ * Definition of a workflow chain.
+ * A chain executes workflows sequentially, passing output from one to the next.
+ */
+export interface ChainDefinition {
+  /** Array of workflow steps to execute in sequence */
+  steps: ChainStep[];
+}
+
+/**
+ * Result of a single step in a workflow chain.
+ */
+export interface ChainStepResult {
+  /** ID of the workflow that was executed */
+  workflowId: string;
+  /** Execution status */
+  status: 'completed' | 'failed' | 'skipped';
+  /** Final output/result text (empty if skipped) */
+  output: string;
+  /** Token usage statistics */
+  tokenUsage: RunTokenUsage;
+  /** Execution duration in milliseconds */
+  durationMs: number;
+  /** Reason for skipping (if status is 'skipped') */
+  skipReason?: string;
+}
+
+/**
+ * Result of a workflow chain execution.
+ */
+export interface ChainResult {
+  /** Overall chain status */
+  status: 'completed' | 'failed' | 'partial';
+  /** Results from each step (in order) */
+  steps: ChainStepResult[];
+  /** Total token usage across all steps */
+  totalTokenUsage: RunTokenUsage;
+  /** Total execution duration in milliseconds */
+  totalDurationMs: number;
+}
+
+/**
+ * Schedule configuration for automated workflow execution.
+ */
+export interface ScheduleConfig {
+  /** Unique identifier for the schedule */
+  id: string;
+  /** ID of the workflow to execute */
+  workflowId: string;
+  /** Parameters to pass to the workflow */
+  params: Record<string, unknown>;
+  /** Cron expression for time-based scheduling (e.g., "0 *\/6 * * *" for every 6 hours) */
+  cron?: string;
+  /** Event name to trigger on (e.g., "run:end") */
+  onEvent?: string;
+  /** Whether this schedule is active */
+  enabled: boolean;
+  /** Creation timestamp */
+  createdAt: string;
+  /** Last execution timestamp (optional) */
+  lastRunAt?: string;
+  /** Next scheduled execution timestamp (optional, for cron schedules) */
+  nextRunAt?: string;
+}
