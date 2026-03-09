@@ -4,8 +4,10 @@ import fs from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import type { Plan, StepStatus, StepResult } from '../types/task.js';
+import type { StorageListOptions, StorageListResult } from '../types/index.js';
 import { validatePlan } from './validation.js';
 import { createNotFoundError } from '../types/errors.js';
+import { normalizeListOptions } from '../types/index.js';
 
 /**
  * PlanStorage — Manages plan persistence as JSON files
@@ -146,9 +148,10 @@ export class PlanStorage {
 
   /**
    * List all plans with metadata (without full steps)
-   * @returns Array of plan metadata
+   * @param options - Pagination options (offset, limit, sort)
+   * @returns Paginated result with plan metadata
    */
-  async list(): Promise<Array<{
+  async list(options?: StorageListOptions): Promise<StorageListResult<{
     id: string;
     title: string;
     description: string;
@@ -157,6 +160,8 @@ export class PlanStorage {
     updatedAt: string;
     stepCount: number;
   }>> {
+    const { offset, limit, sort } = normalizeListOptions(options);
+
     try {
       // Read all subdirectories in baseDir
       const entries = await fs.readdir(this.baseDir, { withFileTypes: true });
@@ -185,16 +190,31 @@ export class PlanStorage {
         })
       );
 
-      // Filter out nulls and return
-      return metadataList.filter(
+      // Filter out nulls
+      const validMetadata = metadataList.filter(
         (metadata): metadata is NonNullable<typeof metadata> => metadata !== null
       );
+
+      // Sort by createdAt
+      validMetadata.sort((a, b) => {
+        const dateA = new Date(a.createdAt).getTime();
+        const dateB = new Date(b.createdAt).getTime();
+        return sort === 'desc' ? dateB - dateA : dateA - dateB;
+      });
+
+      // Get total count
+      const total = validMetadata.length;
+
+      // Apply pagination
+      const data = validMetadata.slice(offset, offset + limit);
+
+      return { data, total, offset, limit };
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error) {
         const err = error as NodeJS.ErrnoException;
         if (err.code === 'ENOENT') {
-          // Base directory doesn't exist yet, return empty list
-          return [];
+          // Base directory doesn't exist yet, return empty result
+          return { data: [], total: 0, offset, limit };
         }
       }
       throw new Error(`Failed to list plans: ${error}`);

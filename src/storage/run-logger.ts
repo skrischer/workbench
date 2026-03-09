@@ -6,7 +6,9 @@ import { homedir } from 'node:os';
 import { existsSync } from 'node:fs';
 import type { RunLog, RunMetadata, RunMessage, RunToolCall, RunLogStatus } from '../types/run.js';
 import type { TokenUsage } from '../types/events.js';
+import type { StorageListOptions, StorageListResult } from '../types/index.js';
 import { createNotFoundError, isNotFoundError } from '../types/errors.js';
+import { normalizeListOptions } from '../types/index.js';
 
 export class RunLogger {
   private baseDir: string;
@@ -156,9 +158,11 @@ export class RunLogger {
 
   /**
    * List all runs with metadata (no full message/tool-call load)
-   * @returns Array of run metadata
+   * @param options - Pagination options (offset, limit, sort)
+   * @returns Paginated result with run metadata
    */
-  async listRuns(): Promise<RunMetadata[]> {
+  async listRuns(options?: StorageListOptions): Promise<StorageListResult<RunMetadata>> {
+    const { offset, limit, sort } = normalizeListOptions(options);
     const { readdir } = await import('node:fs/promises');
     const runsDir = join(this.baseDir, 'runs');
 
@@ -188,16 +192,31 @@ export class RunLogger {
         })
       );
 
-      // Filter out nulls and return
-      return metadataList.filter(
+      // Filter out nulls
+      const validMetadata = metadataList.filter(
         (metadata): metadata is RunMetadata => metadata !== null
       );
+
+      // Sort by startedAt (or endedAt if available)
+      validMetadata.sort((a, b) => {
+        const dateA = new Date(a.startedAt).getTime();
+        const dateB = new Date(b.startedAt).getTime();
+        return sort === 'desc' ? dateB - dateA : dateA - dateB;
+      });
+
+      // Get total count
+      const total = validMetadata.length;
+
+      // Apply pagination
+      const data = validMetadata.slice(offset, offset + limit);
+
+      return { data, total, offset, limit };
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error) {
         const err = error as NodeJS.ErrnoException;
         if (err.code === 'ENOENT') {
-          // Runs directory doesn't exist yet, return empty list
-          return [];
+          // Runs directory doesn't exist yet, return empty result
+          return { data: [], total: 0, offset, limit };
         }
       }
       throw new Error(`Failed to list runs: ${error}`);

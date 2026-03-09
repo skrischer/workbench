@@ -35,11 +35,15 @@ export const statsRoutes: FastifyPluginAsync<StatsRouteOptions> = async (fastify
   }>('/api/stats', async (_request, reply) => {
     try {
       // Fetch all data in parallel
-      const [runs, sessions, plans] = await Promise.all([
-        runLogger.listRuns(),
-        sessionStorage.list(),
-        planStorage.list(),
+      const [runsResult, sessionsResult, plansResult] = await Promise.all([
+        runLogger.listRuns({ limit: 10000 }),
+        sessionStorage.list({ limit: 10000 }),
+        planStorage.list({ limit: 10000 }),
       ]);
+
+      const runs = runsResult.data;
+      const sessions = sessionsResult.data;
+      const plans = plansResult.data;
 
       // Aggregate token usage
       let totalTokens = 0;
@@ -58,9 +62,9 @@ export const statsRoutes: FastifyPluginAsync<StatsRouteOptions> = async (fastify
       }
 
       const stats: StatsResponse = {
-        totalRuns: runs.length,
-        totalPlans: plans.length,
-        totalSessions: sessions.length,
+        totalRuns: runsResult.total,
+        totalPlans: plansResult.total,
+        totalSessions: sessionsResult.total,
         tokenUsage: {
           total: totalTokens,
           byModel,

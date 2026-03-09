@@ -76,8 +76,9 @@ export async function plansCommand(options: PlansCommandOptions): Promise<void> 
     // 1. Create PlanStorage
     const planStorage = new PlanStorage();
 
-    // 2. List all plans
-    let plans = await planStorage.list();
+    // 2. List all plans (with no limit for CLI)
+    const result = await planStorage.list({ limit: 1000 });
+    let plans = result.data;
 
     // 3. Filter by status if requested
     if (options.status) {
@@ -85,7 +86,7 @@ export async function plansCommand(options: PlansCommandOptions): Promise<void> 
       plans = plans.filter((plan) => plan.status === statusFilter);
     }
 
-    // 4. Sort by creation date (newest first)
+    // 4. Sort by creation date (newest first) - already sorted by storage, but filter may have changed order
     plans.sort((a, b) => {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });

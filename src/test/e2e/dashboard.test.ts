@@ -130,7 +130,11 @@ describe('E2E Dashboard Tests', () => {
       expect(response.status).toBe(200);
       
       const data = await response.json();
-      expect(Array.isArray(data)).toBe(true);
+      expect(data).toHaveProperty('data');
+      expect(data).toHaveProperty('total');
+      expect(data).toHaveProperty('offset');
+      expect(data).toHaveProperty('limit');
+      expect(Array.isArray(data.data)).toBe(true);
     });
 
     it('should serve /api/runs endpoint', async () => {
@@ -139,7 +143,11 @@ describe('E2E Dashboard Tests', () => {
       expect(response.status).toBe(200);
       
       const data = await response.json();
-      expect(Array.isArray(data)).toBe(true);
+      expect(data).toHaveProperty('data');
+      expect(data).toHaveProperty('total');
+      expect(data).toHaveProperty('offset');
+      expect(data).toHaveProperty('limit');
+      expect(Array.isArray(data.data)).toBe(true);
     });
   });
 
