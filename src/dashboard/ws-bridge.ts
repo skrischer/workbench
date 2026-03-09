@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from 'ws';
 import type { TypedEventBus } from '../events/event-bus.js';
 import type { EventMap } from '../types/events.js';
+import type { DashboardConfig } from './config.js';
 import { randomUUID } from 'crypto';
 
 /**
@@ -83,13 +84,16 @@ function matchesPattern(pattern: string, eventName: string): boolean {
  * - Client-side event filtering via subscribe/unsubscribe with glob patterns
  * - Heartbeat ping every 30 seconds
  * - Connection tracking (clientId, connectedAt)
+ * - Optional token-based authentication (via query param `?token=XYZ`)
  * 
  * @param server - Fastify instance (must have @fastify/websocket registered)
  * @param eventBus - TypedEventBus instance
+ * @param config - Dashboard configuration (optional, for wsToken)
  */
 export function attachWebSocket(
   server: FastifyInstance,
-  eventBus: TypedEventBus<EventMap>
+  eventBus: TypedEventBus<EventMap>,
+  config?: Required<DashboardConfig>
 ): void {
   const clients = new Map<string, ClientState>();
 
@@ -146,7 +150,22 @@ export function attachWebSocket(
   }
 
   // WebSocket endpoint
-  server.get('/ws', { websocket: true }, (socket, _request) => {
+  server.get('/ws', { websocket: true }, (socket, request) => {
+    // Token-based authentication (if configured)
+    if (config?.wsToken) {
+      const query = request.query as { token?: string } | undefined;
+      const providedToken = query?.token;
+      
+      if (!providedToken || providedToken !== config.wsToken) {
+        server.log.warn(
+          { ip: request.ip, providedToken: providedToken ? '[REDACTED]' : undefined },
+          'WebSocket authentication failed'
+        );
+        socket.close(4401, 'Unauthorized: Invalid or missing token');
+        return;
+      }
+    }
+
     const clientId = randomUUID();
     const state: ClientState = {
       clientId,
