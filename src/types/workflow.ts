@@ -134,3 +134,27 @@ export interface ChainResult {
   /** Total execution duration in milliseconds */
   totalDurationMs: number;
 }
+
+/**
+ * Schedule configuration for automated workflow execution.
+ */
+export interface ScheduleConfig {
+  /** Unique identifier for the schedule */
+  id: string;
+  /** ID of the workflow to execute */
+  workflowId: string;
+  /** Parameters to pass to the workflow */
+  params: Record<string, unknown>;
+  /** Cron expression for time-based scheduling (e.g., "0 *\/6 * * *" for every 6 hours) */
+  cron?: string;
+  /** Event name to trigger on (e.g., "run:end") */
+  onEvent?: string;
+  /** Whether this schedule is active */
+  enabled: boolean;
+  /** Creation timestamp */
+  createdAt: string;
+  /** Last execution timestamp (optional) */
+  lastRunAt?: string;
+  /** Next scheduled execution timestamp (optional, for cron schedules) */
+  nextRunAt?: string;
+}

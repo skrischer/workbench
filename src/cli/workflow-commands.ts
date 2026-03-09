@@ -612,6 +612,215 @@ function createChainCommand(): Command {
 }
 
 /**
+ * Create the 'schedule' command.
+ */
+function createScheduleCommand(): Command {
+  const cmd = new Command('schedule');
+  
+  cmd
+    .description('Schedule a workflow to run on cron or event')
+    .argument('<workflow-id>', 'ID of the workflow to schedule')
+    .option('--cron <expression>', 'Cron expression (e.g., "0 */6 * * *")')
+    .option('--on-event <event>', 'Event name to trigger on (e.g., "run:end")')
+    .option('--params <json>', 'Workflow parameters as JSON string')
+    .option('--disabled', 'Create schedule but keep it disabled')
+    .action(async (
+      workflowId: string,
+      options: { cron?: string; onEvent?: string; params?: string; disabled?: boolean }
+    ) => {
+      try {
+        // Validate that either cron or onEvent is provided
+        if (!options.cron && !options.onEvent) {
+          console.error('❌ Error: Either --cron or --on-event must be specified');
+          process.exit(1);
+        }
+
+        // Parse params if provided
+        let params = {};
+        if (options.params) {
+          try {
+            params = JSON.parse(options.params);
+          } catch (error) {
+            console.error(`❌ Error: Invalid JSON in --params`);
+            process.exit(1);
+          }
+        }
+
+        // Create workflow dependencies
+        const deps = await createWorkflowDependencies();
+        const registry = createRegistry();
+
+        // Create scheduler (but don't start it)
+        const { WorkflowScheduler } = await import('../workflows/scheduler.js');
+        const scheduler = new WorkflowScheduler(
+          registry,
+          deps.anthropicClient,
+          deps.sessionStorage,
+          deps.toolRegistry,
+          deps.eventBus
+        );
+
+        // Create schedule
+        const schedule = await scheduler.createSchedule({
+          workflowId,
+          params,
+          cron: options.cron,
+          onEvent: options.onEvent,
+          enabled: !options.disabled,
+        });
+
+        console.log('');
+        console.log('✅ Schedule created successfully');
+        console.log('─────────────────────────────────────────');
+        console.log(`📋 Schedule ID: ${schedule.id}`);
+        console.log(`🔧 Workflow: ${schedule.workflowId}`);
+        if (schedule.cron) {
+          console.log(`⏰ Cron: ${schedule.cron}`);
+          console.log(`📅 Next Run: ${schedule.nextRunAt}`);
+        }
+        if (schedule.onEvent) {
+          console.log(`📡 Event: ${schedule.onEvent}`);
+        }
+        console.log(`🟢 Enabled: ${schedule.enabled}`);
+        console.log('');
+        console.log('💡 The schedule will be active when the dashboard is running.');
+        console.log('');
+
+        process.exit(0);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`❌ Error: ${message}`);
+        process.exit(1);
+      }
+    });
+  
+  return cmd;
+}
+
+/**
+ * Create the 'schedules' command (list all schedules).
+ */
+function createSchedulesCommand(): Command {
+  const cmd = new Command('schedules');
+  
+  cmd
+    .description('List all scheduled workflows')
+    .action(async () => {
+      try {
+        // Create workflow dependencies
+        const deps = await createWorkflowDependencies();
+        const registry = createRegistry();
+
+        // Create scheduler
+        const { WorkflowScheduler } = await import('../workflows/scheduler.js');
+        const scheduler = new WorkflowScheduler(
+          registry,
+          deps.anthropicClient,
+          deps.sessionStorage,
+          deps.toolRegistry,
+          deps.eventBus
+        );
+
+        // List schedules
+        const schedules = scheduler.listSchedules();
+
+        if (schedules.length === 0) {
+          console.log('');
+          console.log('📋 No schedules found');
+          console.log('');
+          console.log('💡 Create a schedule with: workbench workflow schedule <workflow-id> --cron "0 8 * * *"');
+          console.log('');
+          process.exit(0);
+        }
+
+        console.log('');
+        console.log('📋 Scheduled Workflows');
+        console.log('═════════════════════════════════════════');
+        console.log('');
+
+        schedules.forEach((schedule, index) => {
+          const statusIcon = schedule.enabled ? '🟢' : '🔴';
+          console.log(`${index + 1}. ${statusIcon} ${schedule.workflowId}`);
+          console.log(`   ID: ${schedule.id}`);
+          
+          if (schedule.cron) {
+            console.log(`   ⏰ Cron: ${schedule.cron}`);
+            if (schedule.nextRunAt) {
+              console.log(`   📅 Next Run: ${schedule.nextRunAt}`);
+            }
+          }
+          
+          if (schedule.onEvent) {
+            console.log(`   📡 Event: ${schedule.onEvent}`);
+          }
+          
+          if (schedule.lastRunAt) {
+            console.log(`   🕐 Last Run: ${schedule.lastRunAt}`);
+          }
+          
+          console.log(`   Created: ${schedule.createdAt}`);
+          console.log('');
+        });
+
+        console.log(`Total: ${schedules.length} schedules`);
+        console.log('');
+
+        process.exit(0);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`❌ Error: ${message}`);
+        process.exit(1);
+      }
+    });
+  
+  return cmd;
+}
+
+/**
+ * Create the 'unschedule' command.
+ */
+function createUnscheduleCommand(): Command {
+  const cmd = new Command('unschedule');
+  
+  cmd
+    .description('Remove a scheduled workflow')
+    .argument('<schedule-id>', 'ID of the schedule to remove')
+    .action(async (scheduleId: string) => {
+      try {
+        // Create workflow dependencies
+        const deps = await createWorkflowDependencies();
+        const registry = createRegistry();
+
+        // Create scheduler
+        const { WorkflowScheduler } = await import('../workflows/scheduler.js');
+        const scheduler = new WorkflowScheduler(
+          registry,
+          deps.anthropicClient,
+          deps.sessionStorage,
+          deps.toolRegistry,
+          deps.eventBus
+        );
+
+        // Delete schedule
+        await scheduler.deleteSchedule(scheduleId);
+
+        console.log('');
+        console.log('✅ Schedule removed successfully');
+        console.log(`📋 Schedule ID: ${scheduleId}`);
+        console.log('');
+
+        process.exit(0);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`❌ Error: ${message}`);
+        process.exit(1);
+      }
+    });
+  
+  return cmd;
+}
+
+/**
  * Create all workflow-related commands.
  * 
  * @returns Array of Commander.js Command instances
@@ -625,5 +834,8 @@ export function createWorkflowCommands(): Command[] {
     createWorkflowsCommand(),
     createWorkflowCommand(), // New nested workflow command
     createChainCommand(), // New chain command
+    createScheduleCommand(), // Schedule a workflow
+    createSchedulesCommand(), // List schedules
+    createUnscheduleCommand(), // Remove a schedule
   ];
 }
