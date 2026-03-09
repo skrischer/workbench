@@ -1,5 +1,7 @@
 // src/cli/workflow-commands.ts — Workflow CLI Commands
 
+import { homedir } from 'node:os';
+import path from 'node:path';
 import { Command } from 'commander';
 import { WorkflowRegistry } from '../workflows/registry.js';
 import { WorkflowRunner } from '../workflows/runner.js';
@@ -7,6 +9,12 @@ import { testFixerWorkflow } from '../workflows/test-fixer.js';
 import { codeReviewerWorkflow } from '../workflows/code-reviewer.js';
 import { refactorWorkflow } from '../workflows/refactor-agent.js';
 import { docsWorkflow } from '../workflows/docs-agent.js';
+import { AnthropicClient } from '../llm/anthropic-client.js';
+import { TokenRefresher } from '../llm/token-refresh.js';
+import { TokenStorage } from '../llm/token-storage.js';
+import { SessionStorage } from '../storage/session-storage.js';
+import { createDefaultTools } from '../tools/defaults.js';
+import { TypedEventBus } from '../events/event-bus.js';
 import type { WorkflowInput, WorkflowResult } from '../types/workflow.js';
 
 /**
@@ -19,6 +27,49 @@ function createRegistry(): WorkflowRegistry {
   registry.register(refactorWorkflow);
   registry.register(docsWorkflow);
   return registry;
+}
+
+/**
+ * Create workflow dependencies (AnthropicClient, SessionStorage, ToolRegistry, EventBus).
+ * @throws Error if token storage is not configured
+ */
+async function createWorkflowDependencies() {
+  // 1. Create TokenStorage (default path: ~/.workbench/tokens.json)
+  const workbenchHome = process.env.WORKBENCH_HOME ?? path.join(homedir(), '.workbench');
+  const tokenPath = path.join(workbenchHome, 'tokens.json');
+  const tokenStorage = new TokenStorage(tokenPath);
+
+  // 2. Create TokenRefresher
+  let tokenRefresher: TokenRefresher;
+  try {
+    tokenRefresher = new TokenRefresher(tokenStorage);
+    // Verify token file exists by attempting to load
+    await tokenStorage.load();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Token error: ${message}\n\n💡 Setup required:\n   1. Create ~/.workbench directory\n   2. Authorize via OAuth and save tokens to ~/.workbench/tokens.json`);
+  }
+
+  // 3. Create AnthropicClient
+  const anthropicClient = new AnthropicClient(tokenRefresher, {
+    apiUrl: process.env.ANTHROPIC_API_URL,
+  });
+
+  // 4. Create ToolRegistry with default tools
+  const toolRegistry = createDefaultTools();
+
+  // 5. Create SessionStorage
+  const sessionStorage = new SessionStorage();
+
+  // 6. Create EventBus
+  const eventBus = new TypedEventBus();
+
+  return {
+    anthropicClient,
+    sessionStorage,
+    toolRegistry,
+    eventBus,
+  };
 }
 
 /**
@@ -67,19 +118,33 @@ function createFixTestsCommand(): Command {
     .option('--max-attempts <n>', 'Maximum fix attempts', parseInt, 5)
     .action(async (options: { filter?: string; maxAttempts?: number }) => {
       try {
+        // 1. Get workflow definition from registry
         const registry = createRegistry();
-        const runner = new WorkflowRunner(registry);
+        const definition = registry.get('test-fixer');
+        if (!definition) {
+          throw new Error(`Workflow 'test-fixer' not found`);
+        }
+
+        // 2. Create workflow dependencies
+        const deps = await createWorkflowDependencies();
+
+        // 3. Create workflow runner with definition and dependencies
+        const runner = new WorkflowRunner(
+          definition,
+          deps.anthropicClient,
+          deps.sessionStorage,
+          deps.toolRegistry,
+          deps.eventBus
+        );
         
-        const input: WorkflowInput = {
-          workflowId: 'test-fixer',
-          params: {
-            testCommand: 'npm test',
-            testFilter: options.filter,
-            maxAttempts: options.maxAttempts ?? 5,
-          },
+        // 4. Run workflow with params (no workflowId needed)
+        const params = {
+          testCommand: 'npm test',
+          testFilter: options.filter,
+          maxAttempts: options.maxAttempts ?? 5,
         };
         
-        const result = await runner.run(input);
+        const result = await runner.run(params);
         console.log(formatResult(result));
         
         process.exit(result.status === 'completed' ? 0 : 1);
@@ -106,19 +171,33 @@ function createReviewCommand(): Command {
     .option('--focus <area>', 'Focus area: security, performance, tests, style')
     .action(async (branch: string, options: { base?: string; focus?: string }) => {
       try {
+        // 1. Get workflow definition from registry
         const registry = createRegistry();
-        const runner = new WorkflowRunner(registry);
+        const definition = registry.get('code-reviewer');
+        if (!definition) {
+          throw new Error(`Workflow 'code-reviewer' not found`);
+        }
+
+        // 2. Create workflow dependencies
+        const deps = await createWorkflowDependencies();
+
+        // 3. Create workflow runner with definition and dependencies
+        const runner = new WorkflowRunner(
+          definition,
+          deps.anthropicClient,
+          deps.sessionStorage,
+          deps.toolRegistry,
+          deps.eventBus
+        );
         
-        const input: WorkflowInput = {
-          workflowId: 'code-reviewer',
-          params: {
-            branch,
-            baseBranch: options.base ?? 'main',
-            focus: options.focus,
-          },
+        // 4. Run workflow with params (no workflowId needed)
+        const params = {
+          branch,
+          baseBranch: options.base ?? 'main',
+          focus: options.focus,
         };
         
-        const result = await runner.run(input);
+        const result = await runner.run(params);
         console.log(formatResult(result));
         
         process.exit(result.status === 'completed' ? 0 : 1);
@@ -149,20 +228,34 @@ function createRefactorCommand(): Command {
       options: { type: string; dryRun?: boolean; description?: string }
     ) => {
       try {
+        // 1. Get workflow definition from registry
         const registry = createRegistry();
-        const runner = new WorkflowRunner(registry);
+        const definition = registry.get('refactor');
+        if (!definition) {
+          throw new Error(`Workflow 'refactor' not found`);
+        }
+
+        // 2. Create workflow dependencies
+        const deps = await createWorkflowDependencies();
+
+        // 3. Create workflow runner with definition and dependencies
+        const runner = new WorkflowRunner(
+          definition,
+          deps.anthropicClient,
+          deps.sessionStorage,
+          deps.toolRegistry,
+          deps.eventBus
+        );
         
-        const input: WorkflowInput = {
-          workflowId: 'refactor',
-          params: {
-            target,
-            type: options.type,
-            dryRun: options.dryRun ?? false,
-            description: options.description,
-          },
+        // 4. Run workflow with params (no workflowId needed)
+        const params = {
+          target,
+          type: options.type,
+          dryRun: options.dryRun ?? false,
+          description: options.description,
         };
         
-        const result = await runner.run(input);
+        const result = await runner.run(params);
         console.log(formatResult(result));
         
         process.exit(result.status === 'completed' ? 0 : 1);
@@ -195,20 +288,34 @@ function createDocsCommand(): Command {
       update?: boolean;
     }) => {
       try {
+        // 1. Get workflow definition from registry
         const registry = createRegistry();
-        const runner = new WorkflowRunner(registry);
+        const definition = registry.get('docs');
+        if (!definition) {
+          throw new Error(`Workflow 'docs' not found`);
+        }
+
+        // 2. Create workflow dependencies
+        const deps = await createWorkflowDependencies();
+
+        // 3. Create workflow runner with definition and dependencies
+        const runner = new WorkflowRunner(
+          definition,
+          deps.anthropicClient,
+          deps.sessionStorage,
+          deps.toolRegistry,
+          deps.eventBus
+        );
         
-        const input: WorkflowInput = {
-          workflowId: 'docs',
-          params: {
-            type: options.type,
-            target: options.target ?? 'src/',
-            style: options.style,
-            update: options.update ?? false,
-          },
+        // 4. Run workflow with params (no workflowId needed)
+        const params = {
+          type: options.type,
+          target: options.target ?? 'src/',
+          style: options.style,
+          update: options.update ?? false,
         };
         
-        const result = await runner.run(input);
+        const result = await runner.run(params);
         console.log(formatResult(result));
         
         process.exit(result.status === 'completed' ? 0 : 1);
@@ -233,9 +340,7 @@ function createWorkflowsCommand(): Command {
     .action(() => {
       try {
         const registry = createRegistry();
-        const runner = new WorkflowRunner(registry);
-        
-        const workflows = runner.listWorkflows();
+        const workflows = registry.list();
         
         console.log('');
         console.log('📋 Available Workflows:');
@@ -277,9 +382,7 @@ function createWorkflowCommand(): Command {
     .action(() => {
       try {
         const registry = createRegistry();
-        const runner = new WorkflowRunner(registry);
-        
-        const workflows = runner.listWorkflows();
+        const workflows = registry.list();
         
         console.log('');
         console.log('📋 Available Workflows:');
@@ -312,23 +415,21 @@ function createWorkflowCommand(): Command {
     .action(async (workflowId: string, options: { params?: string }) => {
       try {
         const registry = createRegistry();
-        const runner = new WorkflowRunner(registry);
         
-        // Check if workflow exists
-        const workflows = runner.listWorkflows();
-        const workflowExists = workflows.some(w => w.id === workflowId);
-        
-        if (!workflowExists) {
+        // 1. Get workflow definition from registry
+        const definition = registry.get(workflowId);
+        if (!definition) {
           console.error(`❌ Error: Workflow '${workflowId}' not found`);
           console.error('');
           console.error('Available workflows:');
+          const workflows = registry.list();
           workflows.forEach(w => {
             console.error(`  - ${w.id}`);
           });
           process.exit(1);
         }
         
-        // Parse params if provided
+        // 2. Parse params if provided
         let params = {};
         if (options.params) {
           try {
@@ -339,12 +440,20 @@ function createWorkflowCommand(): Command {
           }
         }
         
-        const input: WorkflowInput = {
-          workflowId,
-          params,
-        };
+        // 3. Create workflow dependencies
+        const deps = await createWorkflowDependencies();
+
+        // 4. Create workflow runner with definition and dependencies
+        const runner = new WorkflowRunner(
+          definition,
+          deps.anthropicClient,
+          deps.sessionStorage,
+          deps.toolRegistry,
+          deps.eventBus
+        );
         
-        const result = await runner.run(input);
+        // 5. Run workflow with params (no workflowId needed)
+        const result = await runner.run(params);
         console.log(formatResult(result));
         
         process.exit(result.status === 'completed' ? 0 : 1);
