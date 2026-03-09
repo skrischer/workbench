@@ -12,6 +12,10 @@ export { SearchCodeTool } from './search-code.js';
 export { ProjectSummaryTool } from './project-summary.js';
 export { createDefaultTools } from './defaults.js';
 
+// Validation
+export { validateToolInput } from './validator.js';
+export type { ValidationResult } from './validator.js';
+
 // Utility exports
 export { defaultIgnores, shouldIgnore, walkDirectory } from './utils/ignore.js';
 export type { WalkOptions, WalkEntry } from './utils/ignore.js';
