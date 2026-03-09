@@ -129,9 +129,23 @@ describe('RunLogger', () => {
     expect(loaded!.toolCalls[0].toolName).toBe('test_tool');
   });
 
-  it('should return null for non-existent run', async () => {
-    const loaded = await logger.loadRun('non-existent-run');
-    expect(loaded).toBeNull();
+  it('should throw NotFoundError for non-existent run', async () => {
+    const { isNotFoundError } = await import('../../types/errors.js');
+    
+    await expect(logger.loadRun('non-existent-run')).rejects.toThrow();
+    
+    try {
+      await logger.loadRun('non-existent-run');
+      expect.fail('Should have thrown NotFoundError');
+    } catch (error) {
+      expect(isNotFoundError(error)).toBe(true);
+      if (isNotFoundError(error)) {
+        expect(error.name).toBe('NotFoundError');
+        expect(error.resource).toBe('Run');
+        expect(error.id).toBe('non-existent-run');
+        expect(error.message).toBe('Run not found: non-existent-run');
+      }
+    }
   });
 
   it('should create pretty-printed JSON files', async () => {

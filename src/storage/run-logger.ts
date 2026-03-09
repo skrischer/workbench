@@ -6,6 +6,7 @@ import { homedir } from 'node:os';
 import { existsSync } from 'node:fs';
 import type { RunLog, RunMetadata, RunMessage, RunToolCall, RunLogStatus } from '../types/run.js';
 import type { TokenUsage } from '../types/events.js';
+import { createNotFoundError, isNotFoundError } from '../types/errors.js';
 
 export class RunLogger {
   private baseDir: string;
@@ -39,7 +40,7 @@ export class RunLogger {
   logStep(runId: string, message: { role: 'user' | 'assistant' | 'system' | 'tool'; content: string; toolCalls?: string[] }, stepIndex: number): void {
     const run = this.runs.get(runId);
     if (!run) {
-      throw new Error(`Run ${runId} not found`);
+      throw createNotFoundError('Run', runId);
     }
 
     const runMessage: RunMessage = {
@@ -58,7 +59,7 @@ export class RunLogger {
   logToolCall(runId: string, toolCall: { toolName: string; input: Record<string, unknown>; output: string; durationMs: number }, stepIndex: number): void {
     const run = this.runs.get(runId);
     if (!run) {
-      throw new Error(`Run ${runId} not found`);
+      throw createNotFoundError('Run', runId);
     }
 
     const runToolCall: RunToolCall = {
@@ -78,7 +79,7 @@ export class RunLogger {
   async endRun(runId: string, status: RunLogStatus, tokenUsage?: TokenUsage): Promise<void> {
     const run = this.runs.get(runId);
     if (!run) {
-      throw new Error(`Run ${runId} not found`);
+      throw createNotFoundError('Run', runId);
     }
 
     run.metadata.endedAt = new Date().toISOString();
@@ -97,7 +98,7 @@ export class RunLogger {
   private async flushToDisk(runId: string): Promise<void> {
     const run = this.runs.get(runId);
     if (!run) {
-      throw new Error(`Run ${runId} not found`);
+      throw createNotFoundError('Run', runId);
     }
 
     const runDir = join(this.baseDir, 'runs', runId);
@@ -118,14 +119,14 @@ export class RunLogger {
 
   /**
    * Load a run from disk
-   * Returns null if run doesn't exist
+   * @throws NotFoundError if run doesn't exist
    */
-  async loadRun(runId: string): Promise<RunLog | null> {
+  async loadRun(runId: string): Promise<RunLog> {
     const runDir = join(this.baseDir, 'runs', runId);
     const runJsonPath = join(runDir, 'run.json');
 
     if (!existsSync(runJsonPath)) {
-      return null;
+      throw createNotFoundError('Run', runId);
     }
 
     try {
@@ -146,7 +147,10 @@ export class RunLogger {
         toolCalls,
       };
     } catch (error) {
-      return null;
+      if (isNotFoundError(error)) {
+        throw error;
+      }
+      throw new Error(`Failed to load run ${runId}: ${error}`);
     }
   }
 

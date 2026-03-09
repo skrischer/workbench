@@ -4,6 +4,7 @@ import type { MemoryEntry } from '../types/memory.js';
 import type { Message } from '../types/index.js';
 import { SUMMARY_PROMPT, createSessionPrompt } from './summary-prompt.js';
 import { validateMemoryEntry } from './validation.js';
+import type { TypedEventBus } from '../events/event-bus.js';
 
 /** LLM callback function type for dependency injection */
 export type LLMCallback = (systemPrompt: string, userPrompt: string) => Promise<string>;
@@ -14,6 +15,8 @@ export interface SummarizerConfig {
   minMessages?: number;
   /** Maximum number of tags to extract */
   maxTags?: number;
+  /** Optional event bus for emitting events */
+  eventBus?: TypedEventBus;
 }
 
 /**
@@ -22,7 +25,8 @@ export interface SummarizerConfig {
  */
 export class SessionSummarizer {
   private readonly generateSummary: LLMCallback;
-  private readonly config: Required<SummarizerConfig>;
+  private readonly config: Required<Omit<SummarizerConfig, 'eventBus'>>;
+  private readonly eventBus?: TypedEventBus;
 
   constructor(generateSummary: LLMCallback, config: SummarizerConfig = {}) {
     this.generateSummary = generateSummary;
@@ -30,6 +34,7 @@ export class SessionSummarizer {
       minMessages: config.minMessages ?? 3,
       maxTags: config.maxTags ?? 10,
     };
+    this.eventBus = config.eventBus;
   }
 
   /**
@@ -86,6 +91,14 @@ export class SessionSummarizer {
 
     // Validate before returning
     validateMemoryEntry(entry);
+
+    // Emit event if event bus is available
+    this.eventBus?.emit('memory:summarized', {
+      sessionId,
+      summaryId: entry.id,
+      messageCount: messages.length,
+    });
+
     return entry;
   }
 

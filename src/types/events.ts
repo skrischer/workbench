@@ -37,6 +37,9 @@ export interface EventMap {
   'message:received': { agentId: string; from: string; to: string; type: string; payload: unknown };
   'workflow:start': { workflowId: string; params: Record<string, unknown> };
   'workflow:end': { workflowId: string; status: 'completed' | 'failed' | 'partial'; durationMs: number };
+  'memory:added': { id: string; type: string; tags: string[] };
+  'memory:searched': { query: string; resultCount: number };
+  'memory:summarized': { sessionId: string; summaryId: string; messageCount: number };
 }
 
 /** Event listener function */

@@ -9,17 +9,16 @@
  * - Component interactions
  */
 
-import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import App from '../App.js';
 import RunsPage from '../pages/RunsPage.js';
 import RunDetailPage from '../pages/RunDetailPage.js';
 import { PlansPage } from '../pages/PlansPage.js';
-import type { RunMetadata, RunLog } from '../../../types/run.js';
-import type { Plan } from '../../../types/task.js';
+import type { RunMetadata, RunLog } from '../../../../types/run.js';
+import type { Plan } from '../../../../types/task.js';
 
 // Mock fetch globally
 const originalFetch = global.fetch;

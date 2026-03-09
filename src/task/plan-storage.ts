@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import type { Plan, StepStatus, StepResult } from '../types/task.js';
 import { validatePlan } from './validation.js';
+import { createNotFoundError } from '../types/errors.js';
 
 /**
  * PlanStorage — Manages plan persistence as JSON files
@@ -53,7 +54,8 @@ export class PlanStorage {
    * Load a plan from disk
    * @param id - The plan ID
    * @returns The loaded plan
-   * @throws Error if plan file does not exist or is invalid
+   * @throws NotFoundError if plan file does not exist
+   * @throws Error if plan is invalid
    */
   async load(id: string): Promise<Plan> {
     const planPath = this.getPlanPath(id);
@@ -70,7 +72,7 @@ export class PlanStorage {
       if (error && typeof error === 'object' && 'code' in error) {
         const err = error as NodeJS.ErrnoException;
         if (err.code === 'ENOENT') {
-          throw new Error(`Plan not found: ${id}`);
+          throw createNotFoundError('Plan', id);
         }
       }
       throw new Error(`Failed to load plan ${id}: ${error}`);

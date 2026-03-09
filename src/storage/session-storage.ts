@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import type { Session, SessionStatus, StorageMessage } from '../types/index.js';
+import { createNotFoundError } from '../types/errors.js';
 
 /**
  * SessionStorage — Manages session persistence as JSON files
@@ -62,7 +63,7 @@ export class SessionStorage {
       if (error && typeof error === 'object' && 'code' in error) {
         const err = error as NodeJS.ErrnoException;
         if (err.code === 'ENOENT') {
-          throw new Error(`Session not found: ${id}`);
+          throw createNotFoundError('Session', id);
         }
       }
       throw new Error(`Failed to load session ${id}: ${error}`);

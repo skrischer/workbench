@@ -3,6 +3,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { SessionStorage } from '../../storage/session-storage.js';
 import type { Session, SessionStatus } from '../../types/index.js';
+import { isNotFoundError } from '../../types/errors.js';
 
 export interface SessionsRouteOptions {
   sessionStorage: SessionStorage;
@@ -39,9 +40,7 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRouteOptions> = async (f
       const session = await sessionStorage.load(id);
       return reply.send(session);
     } catch (error) {
-      const err = error as Error;
-      
-      if (err.message.includes('not found')) {
+      if (isNotFoundError(error)) {
         return reply.status(404).send({ error: 'Not found' });
       }
 
