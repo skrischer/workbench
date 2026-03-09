@@ -192,9 +192,15 @@ describe('E2E Smoke Test', () => {
         // Should not timeout/crash
         expect(result.timedOut).toBe(false);
 
-        // Should show rate limit message
+        // Should show rate limit message OR fallback exhausted message
+        // With new fallback handler, 429 triggers fallback chain
         const output = result.stderr + result.stdout;
-        expect(output.toLowerCase()).toMatch(/rate.*limit|too.*many.*request|429/);
+        const hasRateLimitIndicator = 
+          output.toLowerCase().includes('429') ||
+          output.toLowerCase().includes('rate limit') ||
+          output.toLowerCase().includes('too many request') ||
+          output.toLowerCase().includes('fallback');
+        expect(hasRateLimitIndicator).toBe(true);
       });
     });
   });

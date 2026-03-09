@@ -30,3 +30,19 @@ export const MODEL_CONSTANTS = {
 export function isValidModel(model: string): boolean {
   return Object.values(MODEL_CONSTANTS).includes(model as any);
 }
+
+/**
+ * Model fallback chain configuration
+ * Ordered list of model candidates to try in sequence
+ */
+export const FALLBACK_CHAIN = [
+  MODEL_CONSTANTS.DEFAULT,        // claude-sonnet-4-20250514 (primary)
+  MODEL_CONSTANTS.FALLBACK,        // claude-3-5-sonnet-20241022 (fallback 1)
+  MODEL_CONSTANTS.OPUS_4,          // claude-opus-4-20250514 (fallback 2)
+] as const;
+
+/**
+ * Cooldown duration in milliseconds after a model failure
+ * Models are unavailable for this duration after triggering a fallback
+ */
+export const MODEL_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
