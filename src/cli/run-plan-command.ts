@@ -15,6 +15,7 @@ import { createDefaultTools } from '../tools/defaults.js';
 import { ToolRegistry } from '../tools/registry.js';
 import type { EventMap } from '../types/events.js';
 import type { Step, StepResult } from '../types/task.js';
+import { DEFAULT_MODEL } from '../config.js';
 
 /**
  * CLI run-plan command options
@@ -51,7 +52,7 @@ export async function runPlanCommand(planId: string, options: RunPlanCommandOpti
       process.exit(1);
     }
 
-    const model = options.model ?? 'claude-3-5-sonnet-20241022';
+    const model = options.model ?? DEFAULT_MODEL;
     const anthropicClient = new AnthropicClient(tokenRefresher, {
       model,
       apiUrl: process.env.ANTHROPIC_API_URL,

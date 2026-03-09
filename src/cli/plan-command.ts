@@ -9,6 +9,7 @@ import { TokenStorage } from '../llm/token-storage.js';
 import { PlanGenerator } from '../task/plan-generator.js';
 import { PlanStorage } from '../task/plan-storage.js';
 import type { Plan } from '../types/task.js';
+import { DEFAULT_MODEL } from '../config.js';
 
 /**
  * CLI plan command options
@@ -92,7 +93,7 @@ export async function planCommand(prompt: string, options: PlanCommandOptions): 
     }
 
     // 3. Create AnthropicClient
-    const model = options.model ?? 'claude-3-5-sonnet-20241022';
+    const model = options.model ?? DEFAULT_MODEL;
     const anthropicClient = new AnthropicClient(tokenRefresher, {
       model,
       apiUrl: process.env.ANTHROPIC_API_URL,

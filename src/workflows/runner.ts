@@ -7,6 +7,7 @@ import type { SessionStorage } from '../storage/session-storage.js';
 import type { ToolRegistry } from '../tools/registry.js';
 import type { TypedEventBus } from '../events/event-bus.js';
 import { AgentLoop } from '../runtime/agent-loop.js';
+import { DEFAULT_MODEL } from '../config.js';
 
 /**
  * WorkflowRunner executes a single workflow with the AgentLoop runtime.
@@ -60,7 +61,7 @@ export class WorkflowRunner {
 
     // 3. Configure AgentLoop with workflow definition
     const agentConfig: AgentConfig = {
-      model: 'claude-3-5-sonnet-20241022',
+      model: DEFAULT_MODEL,
       systemPrompt,
       maxSteps: this.workflowDefinition.defaultMaxSteps,
       tools: this.workflowDefinition.tools, // Tool whitelist!

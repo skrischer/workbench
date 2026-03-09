@@ -41,3 +41,19 @@ export const MODEL_ALIASES = new Map<string, string>([
   ['sonnet-3.5', 'claude-3-5-sonnet-20241022'],
   ['haiku-4', 'claude-3-5-haiku-20241022'],
 ]);
+
+/**
+ * Model fallback chain configuration
+ * Ordered list of model candidates to try in sequence
+ */
+export const FALLBACK_CHAIN = [
+  MODEL_CONSTANTS.DEFAULT,        // claude-sonnet-4-20250514 (primary)
+  MODEL_CONSTANTS.FALLBACK,        // claude-3-5-sonnet-20241022 (fallback 1)
+  MODEL_CONSTANTS.OPUS_4,          // claude-opus-4-20250514 (fallback 2)
+] as const;
+
+/**
+ * Cooldown duration in milliseconds after a model failure
+ * Models are unavailable for this duration after triggering a fallback
+ */
+export const MODEL_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
