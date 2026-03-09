@@ -116,8 +116,16 @@ function createFixTestsCommand(): Command {
   cmd
     .description('Analyze and fix failing tests')
     .option('--filter <pattern>', 'Test filter pattern')
-    .option('--max-attempts <n>', 'Maximum fix attempts', parseInt, 5)
-    .action(async (options: { filter?: string; maxAttempts?: number }) => {
+    .option('--max-attempts <n>', 'Maximum number of fix attempts (default: 5)', parseInt, 5)
+    .option('--max-iterations <n>', '[DEPRECATED] Use --max-attempts instead', parseInt)
+    .action(async (options: { filter?: string; maxAttempts?: number; maxIterations?: number }) => {
+      // Handle deprecated --max-iterations option
+      if (options.maxIterations !== undefined) {
+        console.warn('⚠️  Warning: --max-iterations is deprecated. Use --max-attempts instead.');
+        if (options.maxAttempts === undefined) {
+          options.maxAttempts = options.maxIterations;
+        }
+      }
       try {
         // 1. Get workflow definition from registry
         const registry = createRegistry();

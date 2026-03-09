@@ -35,6 +35,52 @@ npm install
 npm run build
 ```
 
+## CLI Usage
+
+### Workflow Commands
+
+```bash
+# Fix failing tests (auto-detect and repair)
+workbench fix-tests [--filter <pattern>] [--max-attempts <n>]
+
+# Review code changes in a branch
+workbench review <branch> [--base <branch>] [--focus <area>]
+
+# Perform code refactoring
+workbench refactor <target> --type <type> [--dry-run] [--description <desc>]
+
+# Generate or update documentation
+workbench docs --type <type> [--target <path>] [--style <style>] [--update]
+
+# List available workflows
+workbench workflows
+
+# Run a specific workflow by ID
+workbench workflow run <workflow-id> [--params <json>]
+
+# Execute a chain of workflows
+workbench chain <workflow-ids> [--cwd <path>] [--params <json>]
+```
+
+### Examples
+
+```bash
+# Fix tests with maximum 3 attempts
+workbench fix-tests --max-attempts 3
+
+# Fix only tests matching pattern "auth"
+workbench fix-tests --filter "auth" --max-attempts 5
+
+# Review PR branch with security focus
+workbench review feature/new-api --base main --focus security
+
+# Refactor: extract method
+workbench refactor src/utils.ts --type extract-method --description "Extract validation logic"
+
+# Generate API documentation
+workbench docs --type api --target src/api --style detailed
+```
+
 ## Status
 
 **Phase 0 — Bootstrap**
