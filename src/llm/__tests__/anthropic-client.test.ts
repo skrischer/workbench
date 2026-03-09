@@ -50,7 +50,7 @@ describe('AnthropicClient', () => {
     vi.restoreAllMocks();
   });
 
-  it('should send request with correct x-api-key header', async () => {
+  it('should send request with correct Authorization Bearer header', async () => {
     const mockResponse = {
       ok: true,
       status: 200,
@@ -68,10 +68,10 @@ describe('AnthropicClient', () => {
 
     await client.sendMessage(testMessages);
 
-    // Verify fetch was called with x-api-key and OAuth beta headers
+    // Verify fetch was called with Authorization: Bearer and OAuth beta headers
     const fetchCall = mockFetch.mock.calls[0];
     expect(fetchCall[1]?.headers).toMatchObject({
-      'x-api-key': 'test-access-token',
+      'Authorization': 'Bearer test-access-token',
       'anthropic-beta': 'oauth-2025-04-20,claude-code-20250219'
     });
   });

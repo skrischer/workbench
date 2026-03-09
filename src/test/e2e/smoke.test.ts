@@ -42,7 +42,7 @@ describe('E2E Smoke Test', () => {
       expect(result.stdout).toContain('Hello! How can I help you today?');
     });
 
-    it('should use x-api-key header with OAuth beta headers', async () => {
+    it('should use Authorization Bearer header with OAuth beta headers', async () => {
       const result = await runCli({
         args: ['run', 'test auth'],
         env: testEnv.env,
@@ -58,12 +58,12 @@ describe('E2E Smoke Test', () => {
       const apiKeyHeader = headers['x-api-key'];
       const betaHeader = headers['anthropic-beta'];
 
-      // Must use x-api-key
-      expect(apiKeyHeader).toBeDefined();
-      expect(apiKeyHeader).toMatch(/^sk-ant-/);
+      // Must use Authorization: Bearer
+      expect(authHeader).toBeDefined();
+      expect(authHeader).toMatch(/^Bearer sk-ant-/);
 
-      // Must NOT use Authorization: Bearer
-      expect(authHeader).toBeUndefined();
+      // Must NOT use x-api-key
+      expect(apiKeyHeader).toBeUndefined();
 
       // Must include OAuth beta header
       expect(betaHeader).toBe('oauth-2025-04-20,claude-code-20250219');
