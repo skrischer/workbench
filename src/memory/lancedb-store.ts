@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import type { MemoryEntry, MemoryQuery, MemoryResult, MemoryType } from '../types/memory.js';
 import { validateMemoryEntry, validateQuery } from './validation.js';
 import { EmbeddingProvider } from './embeddings.js';
+import type { TypedEventBus } from '../events/event-bus.js';
 
 /** LanceDB table schema */
 interface LanceDBRecord extends Record<string, unknown> {
@@ -33,21 +34,25 @@ export class LanceDBMemoryStore {
   private dbPath: string;
   private tableName: string;
   private initialized = false;
+  private eventBus?: TypedEventBus;
 
   /**
    * Creates a LanceDB memory store instance.
    * @param dbPath - Database directory path (default: ~/.workbench/memory/)
    * @param tableName - Table name (default: 'memories')
    * @param embeddingProvider - Optional custom embedding provider
+   * @param eventBus - Optional event bus for emitting memory events
    */
   constructor(
     dbPath?: string,
     tableName = 'memories',
-    embeddingProvider?: EmbeddingProvider
+    embeddingProvider?: EmbeddingProvider,
+    eventBus?: TypedEventBus
   ) {
     this.dbPath = dbPath ?? join(homedir(), '.workbench', 'memory');
     this.tableName = tableName;
     this.embeddingProvider = embeddingProvider ?? new EmbeddingProvider();
+    this.eventBus = eventBus;
   }
 
   /**
@@ -152,6 +157,13 @@ export class LanceDBMemoryStore {
     // Insert into table
     await this.table!.add([record]);
 
+    // Emit event if event bus is available
+    this.eventBus?.emit('memory:added', {
+      id: fullEntry.id,
+      type: fullEntry.type,
+      tags: fullEntry.tags,
+    });
+
     return fullEntry;
   }
 
@@ -205,6 +217,12 @@ export class LanceDBMemoryStore {
       })
       .filter((result: MemoryResult) => !query.minScore || result.score >= query.minScore)
       .sort((a: MemoryResult, b: MemoryResult) => b.score - a.score); // Sort by score descending
+
+    // Emit event if event bus is available
+    this.eventBus?.emit('memory:searched', {
+      query: query.text,
+      resultCount: memoryResults.length,
+    });
 
     return memoryResults;
   }
