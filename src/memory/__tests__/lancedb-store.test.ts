@@ -14,7 +14,7 @@ describe('LanceDBMemoryStore', () => {
   beforeEach(async () => {
     // Create temporary directory for each test
     testDir = await mkdtemp(join(tmpdir(), 'lancedb-test-'));
-    store = new LanceDBMemoryStore(testDir);
+    store = new LanceDBMemoryStore({ dbPath: testDir });
     await store.init();
   });
 

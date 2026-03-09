@@ -23,6 +23,14 @@ interface LanceDBRecord extends Record<string, unknown> {
   vector: number[]; // LanceDB expects plain array, not Float32Array
 }
 
+/** Configuration options for LanceDBMemoryStore */
+export interface LanceDBMemoryStoreOptions {
+  dbPath?: string;
+  tableName?: string;
+  embeddingProvider?: EmbeddingProvider;
+  eventBus?: TypedEventBus;
+}
+
 /**
  * LanceDB-based memory store with vector search capabilities.
  * Stores memory entries with embeddings for semantic search.
@@ -38,21 +46,13 @@ export class LanceDBMemoryStore {
 
   /**
    * Creates a LanceDB memory store instance.
-   * @param dbPath - Database directory path (default: ~/.workbench/memory/)
-   * @param tableName - Table name (default: 'memories')
-   * @param embeddingProvider - Optional custom embedding provider
-   * @param eventBus - Optional event bus for emitting memory events
+   * @param options - Configuration options
    */
-  constructor(
-    dbPath?: string,
-    tableName = 'memories',
-    embeddingProvider?: EmbeddingProvider,
-    eventBus?: TypedEventBus
-  ) {
-    this.dbPath = dbPath ?? join(homedir(), '.workbench', 'memory');
-    this.tableName = tableName;
-    this.embeddingProvider = embeddingProvider ?? new EmbeddingProvider();
-    this.eventBus = eventBus;
+  constructor(options: LanceDBMemoryStoreOptions = {}) {
+    this.dbPath = options.dbPath ?? join(homedir(), '.workbench', 'memory');
+    this.tableName = options.tableName ?? 'memories';
+    this.embeddingProvider = options.embeddingProvider ?? new EmbeddingProvider();
+    this.eventBus = options.eventBus;
   }
 
   /**
@@ -158,11 +158,13 @@ export class LanceDBMemoryStore {
     await this.table!.add([record]);
 
     // Emit event if event bus is available
-    this.eventBus?.emit('memory:added', {
-      id: fullEntry.id,
-      type: fullEntry.type,
-      tags: fullEntry.tags,
-    });
+    if (this.eventBus) {
+      this.eventBus.emit('memory:added', {
+        id: fullEntry.id,
+        type: fullEntry.type,
+        tags: fullEntry.tags,
+      });
+    }
 
     return fullEntry;
   }
@@ -219,10 +221,12 @@ export class LanceDBMemoryStore {
       .sort((a: MemoryResult, b: MemoryResult) => b.score - a.score); // Sort by score descending
 
     // Emit event if event bus is available
-    this.eventBus?.emit('memory:searched', {
-      query: query.text,
-      resultCount: memoryResults.length,
-    });
+    if (this.eventBus) {
+      this.eventBus.emit('memory:searched', {
+        query: query.text,
+        resultCount: memoryResults.length,
+      });
+    }
 
     return memoryResults;
   }

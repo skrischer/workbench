@@ -3,6 +3,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { PlanStorage } from '../../task/plan-storage.js';
 import type { Plan } from '../../types/task.js';
+import { isNotFoundError } from '../../types/errors.js';
 
 export interface PlansRouteOptions {
   planStorage: PlanStorage;
@@ -39,9 +40,7 @@ export const plansRoutes: FastifyPluginAsync<PlansRouteOptions> = async (fastify
       const plan = await planStorage.load(id);
       return reply.send(plan);
     } catch (error) {
-      const err = error as Error;
-      
-      if (err.message.includes('not found')) {
+      if (isNotFoundError(error)) {
         return reply.status(404).send({ error: 'Not found' });
       }
 

@@ -27,7 +27,7 @@ describe('Memory Events', () => {
 
   describe('LanceDBMemoryStore', () => {
     it('should emit memory:added event when adding an entry', async () => {
-      const store = new LanceDBMemoryStore(tempDir, 'test-memories', undefined, eventBus);
+      const store = new LanceDBMemoryStore({ dbPath: tempDir, tableName: 'test-memories', eventBus });
       await store.init();
 
       // Set up event listener
@@ -53,7 +53,7 @@ describe('Memory Events', () => {
     });
 
     it('should emit memory:searched event when searching', async () => {
-      const store = new LanceDBMemoryStore(tempDir, 'test-memories', undefined, eventBus);
+      const store = new LanceDBMemoryStore({ dbPath: tempDir, tableName: 'test-memories', eventBus });
       await store.init();
 
       // Add some entries first
@@ -90,7 +90,7 @@ describe('Memory Events', () => {
 
     it('should not crash when adding entry without EventBus', async () => {
       // Create store without event bus
-      const store = new LanceDBMemoryStore(tempDir, 'test-memories');
+      const store = new LanceDBMemoryStore({ dbPath: tempDir, tableName: 'test-memories' });
       await store.init();
 
       // This should not throw
@@ -109,7 +109,7 @@ describe('Memory Events', () => {
 
     it('should not crash when searching without EventBus', async () => {
       // Create store without event bus
-      const store = new LanceDBMemoryStore(tempDir, 'test-memories');
+      const store = new LanceDBMemoryStore({ dbPath: tempDir, tableName: 'test-memories' });
       await store.init();
 
       // Add entry first

@@ -245,3 +245,5 @@ export type {
   WorkflowInput,
   WorkflowResult,
 } from './workflow.js';
+// Error Types
+export { StorageError, NotFoundError, isNotFoundError, createNotFoundError } from './errors.js';

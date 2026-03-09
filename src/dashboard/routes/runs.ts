@@ -3,6 +3,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { RunLogger } from '../../storage/run-logger.js';
 import type { RunMetadata, RunLog } from '../../types/run.js';
+import { isNotFoundError } from '../../types/errors.js';
 
 export interface RunsRouteOptions {
   runLogger: RunLogger;
@@ -37,13 +38,12 @@ export const runsRoutes: FastifyPluginAsync<RunsRouteOptions> = async (fastify, 
 
     try {
       const run = await runLogger.loadRun(id);
-
-      if (!run) {
+      return reply.send(run);
+    } catch (error) {
+      if (isNotFoundError(error)) {
         return reply.status(404).send({ error: 'Not found' });
       }
 
-      return reply.send(run);
-    } catch (error) {
       fastify.log.error(error, `Failed to load run ${id}`);
       return reply.status(500).send({ error: 'Failed to load run' });
     }
