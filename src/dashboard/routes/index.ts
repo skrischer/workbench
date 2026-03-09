@@ -7,6 +7,7 @@ import type { PlanStorage } from '../../task/plan-storage.js';
 import { runsRoutes } from './runs.js';
 import { plansRoutes } from './plans.js';
 import { sessionsRoutes } from './sessions.js';
+import { statsRoutes } from './stats.js';
 
 export interface RouteDependencies {
   runLogger: RunLogger;
@@ -37,5 +38,12 @@ export async function registerRoutes(
   // Register sessions routes
   await fastify.register(sessionsRoutes, {
     sessionStorage: deps.sessionStorage,
+  });
+
+  // Register stats routes
+  await fastify.register(statsRoutes, {
+    runLogger: deps.runLogger,
+    sessionStorage: deps.sessionStorage,
+    planStorage: deps.planStorage,
   });
 }

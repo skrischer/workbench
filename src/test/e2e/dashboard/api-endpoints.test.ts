@@ -123,6 +123,40 @@ describe('Dashboard API Endpoints (inject)', () => {
     });
   });
 
+  describe('Stats API', () => {
+    it('GET /api/stats returns 200 with aggregated statistics', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/stats',
+      });
+
+      expect(response.statusCode).toBe(200);
+      
+      const data = JSON.parse(response.body);
+      expect(data).toHaveProperty('totalRuns');
+      expect(data).toHaveProperty('totalPlans');
+      expect(data).toHaveProperty('totalSessions');
+      expect(data).toHaveProperty('tokenUsage');
+      expect(data.tokenUsage).toHaveProperty('total');
+      expect(data.tokenUsage).toHaveProperty('byModel');
+      expect(typeof data.totalRuns).toBe('number');
+      expect(typeof data.totalPlans).toBe('number');
+      expect(typeof data.totalSessions).toBe('number');
+      expect(typeof data.tokenUsage.total).toBe('number');
+      expect(typeof data.tokenUsage.byModel).toBe('object');
+    });
+
+    it('GET /api/stats returns application/json content type', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/stats',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['content-type']).toContain('application/json');
+    });
+  });
+
   describe('404 for Unknown Routes', () => {
     it('GET /api/nonexistent returns 404', async () => {
       const response = await app.inject({
