@@ -7,7 +7,7 @@ import type { SessionStorage } from '../storage/session-storage.js';
 import type { ToolRegistry } from '../tools/registry.js';
 import type { TypedEventBus } from '../events/event-bus.js';
 import { AgentLoop } from '../runtime/agent-loop.js';
-import { DEFAULT_MODEL } from '../config.js';
+import { DEFAULT_MODEL } from '../config/index.js';
 
 /**
  * WorkflowRunner executes a single workflow with the AgentLoop runtime.

@@ -9,7 +9,7 @@ import { TokenStorage } from '../llm/token-storage.js';
 import { PlanGenerator } from '../task/plan-generator.js';
 import { PlanStorage } from '../task/plan-storage.js';
 import type { Plan } from '../types/task.js';
-import { DEFAULT_MODEL } from '../config.js';
+import { DEFAULT_MODEL } from '../config/index.js';
 
 /**
  * CLI plan command options

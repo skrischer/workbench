@@ -15,7 +15,7 @@ import { createDefaultTools } from '../tools/defaults.js';
 import { ToolRegistry } from '../tools/registry.js';
 import type { EventMap } from '../types/events.js';
 import type { Step, StepResult } from '../types/task.js';
-import { DEFAULT_MODEL } from '../config.js';
+import { DEFAULT_MODEL } from '../config/index.js';
 
 /**
  * CLI run-plan command options
