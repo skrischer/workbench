@@ -18,6 +18,7 @@ import type { AnthropicClient } from '../llm/anthropic-client.js';
 import type { SessionStorage } from '../storage/session-storage.js';
 import type { ToolRegistry } from '../tools/registry.js';
 import type { TypedEventBus } from '../events/event-bus.js';
+import { validateToolInput } from '../tools/validator.js';
 
 /**
  * AgentLoop — Core agent runtime loop
@@ -336,6 +337,17 @@ export class CoreAgentLoop {
           type: 'tool_result',
           tool_use_id: toolUse.id,
           content: `Error: Tool "${toolUse.name}" not found in registry`,
+          is_error: true,
+        };
+      }
+
+      // Validate tool input against schema before execution
+      const validation = validateToolInput(tool.inputSchema, toolUse.input as Record<string, unknown>);
+      if (!validation.valid) {
+        return {
+          type: 'tool_result',
+          tool_use_id: toolUse.id,
+          content: `Input validation failed for tool "${toolUse.name}":\n${validation.errors!.join('\n')}`,
           is_error: true,
         };
       }
