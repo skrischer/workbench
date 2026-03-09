@@ -105,6 +105,72 @@ const expiresAtMs = Date.now() + (expires_in * 1000) - (5 * 60 * 1000)
 - **Refresh Token**: `sk-ant-ort01-` (OAuth Refresh Token)
 - **Setup Token**: `sk-ant-oat01-` (alternatives Format, mind. 80 Zeichen)
 
+## Messages API Verwendung mit OAuth Tokens
+
+### API-Endpunkt
+
+OAuth Access Tokens verwenden **denselben Endpunkt** wie reguläre API Keys:
+
+```
+https://api.anthropic.com/v1/messages
+```
+
+**Wichtig**: Nicht `console.anthropic.com` verwenden, sondern `api.anthropic.com`.
+
+### HTTP-Headers für API-Requests
+
+OAuth-Tokens erfordern **spezielle Header-Konfiguration**:
+
+```typescript
+{
+  'x-api-key': accessToken,              // NICHT 'Authorization: Bearer'!
+  'anthropic-version': '2023-06-01',
+  'Content-Type': 'application/json',
+  'anthropic-beta': 'oauth-2025-04-20,claude-code-20250219'
+}
+```
+
+### Wichtige Unterschiede zu Standard-API-Keys
+
+**❌ FALSCH** (Standard Bearer Token):
+```typescript
+'Authorization': `Bearer ${accessToken}`
+```
+
+**✅ KORREKT** (OAuth Token):
+```typescript
+'x-api-key': accessToken
+```
+
+### Beta-Header
+
+Der `anthropic-beta` Header ist **zwingend erforderlich** für OAuth-basierte Requests:
+
+```
+anthropic-beta: oauth-2025-04-20,claude-code-20250219
+```
+
+**Beta-Features**:
+- `oauth-2025-04-20` — OAuth 2.0 Token Support
+- `claude-code-20250219` — Claude Code Capabilities
+
+### Beispiel-Request
+
+```bash
+curl -X POST https://api.anthropic.com/v1/messages \
+  -H "x-api-key: sk-ant-oat01-..." \
+  -H "anthropic-version: 2023-06-01" \
+  -H "anthropic-beta: oauth-2025-04-20,claude-code-20250219" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-sonnet-4-20250514",
+    "max_tokens": 1024,
+    "messages": [
+      {"role": "user", "content": "Hello, Claude!"}
+    ]
+  }'
+```
+
 ## Token Refresh-Mechanismus
 
 ### Refresh-Trigger
