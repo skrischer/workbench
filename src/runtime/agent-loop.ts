@@ -157,9 +157,13 @@ export class AgentLoop {
 
         // d. Save assistant response
         const assistantContent = this.extractTextContent(response.content);
+        const toolUseBlocks = response.content.filter(
+          (block): block is ToolUseBlock => block.type === 'tool_use'
+        );
         const assistantMessage: AssistantMessage = {
           role: 'assistant',
           content: assistantContent,
+          toolUses: toolUseBlocks.length > 0 ? toolUseBlocks : undefined,
           timestamp: new Date().toISOString(),
         };
         await this.sessionStorage.addMessage(session.id, assistantMessage);
@@ -364,7 +368,7 @@ export class AgentLoop {
   /**
    * Convert session messages to LLM format
    */
-  private convertToLLMMessages(messages: Array<{ role: string; content: string; toolCallId?: string }>): LLMMessage[] {
+  private convertToLLMMessages(messages: Array<{ role: string; content: string; toolCallId?: string; toolUses?: ToolUseBlock[] }>): LLMMessage[] {
     const llmMessages: LLMMessage[] = [];
     const toolResultBuffer: ToolResultBlock[] = [];
 
@@ -393,10 +397,32 @@ export class AgentLoop {
           toolResultBuffer.length = 0;
         }
         // Add assistant message
-        llmMessages.push({
-          role: 'assistant',
-          content: msg.content,
-        });
+        // If message has tool uses, build ContentBlock[] with text + tool_use blocks
+        if (msg.toolUses && msg.toolUses.length > 0) {
+          const contentBlocks: ContentBlock[] = [];
+          
+          // Add text block if content is not empty
+          if (msg.content.trim()) {
+            contentBlocks.push({
+              type: 'text',
+              text: msg.content,
+            });
+          }
+          
+          // Add tool use blocks
+          contentBlocks.push(...msg.toolUses);
+          
+          llmMessages.push({
+            role: 'assistant',
+            content: contentBlocks,
+          });
+        } else {
+          // Plain text assistant message
+          llmMessages.push({
+            role: 'assistant',
+            content: msg.content,
+          });
+        }
       } else if (msg.role === 'tool' || msg.role === 'tool_result') {
         // Buffer tool results (they get sent as user messages with ToolResultBlock content)
         toolResultBuffer.push({
