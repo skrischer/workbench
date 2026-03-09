@@ -30,3 +30,14 @@ export const MODEL_CONSTANTS = {
 export function isValidModel(model: string): boolean {
   return Object.values(MODEL_CONSTANTS).includes(model as any);
 }
+
+/**
+ * Model name aliases for user convenience
+ * Maps short-form aliases to full model identifiers
+ */
+export const MODEL_ALIASES = new Map<string, string>([
+  ['opus-4', 'claude-opus-4-20250514'],
+  ['sonnet-4', 'claude-sonnet-4-20250514'],
+  ['sonnet-3.5', 'claude-3-5-sonnet-20241022'],
+  ['haiku-4', 'claude-3-5-haiku-20241022'],
+]);

@@ -1,6 +1,6 @@
 import type { LLMMessage, LLMToolDef, LLMConfig, LLMResponse } from '../types/index.js';
 import { TokenRefresher } from './token-refresh.js';
-import { DEFAULT_MODEL, ANTHROPIC_API_URL } from '../config/index.js';
+import { DEFAULT_MODEL, ANTHROPIC_API_URL, resolveModelName } from '../config/index.js';
 
 /**
  * AnthropicClient — Messages API client with OAuth Bearer token authentication
@@ -37,9 +37,12 @@ export class AnthropicClient {
     // Get valid access token
     const accessToken = await this.tokenRefresher.ensureValidToken();
 
+    // Resolve model name alias to full identifier
+    const resolvedModel = resolveModelName(this.config.model);
+
     // Build request body
     const requestBody: Record<string, unknown> = {
-      model: this.config.model,
+      model: resolvedModel,
       max_tokens: this.config.maxTokens,
       messages
     };
