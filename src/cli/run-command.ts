@@ -146,6 +146,11 @@ export async function runCommand(prompt: string, options: RunCommandOptions): Pr
     const baseRegistry = createDefaultTools();
     const toolRegistry = new LoggingToolRegistry(baseRegistry);
 
+    // ✅ CRITICAL: Ensure tools are populated if config is empty
+    if (!agentConfig.tools || agentConfig.tools.length === 0) {
+      agentConfig.tools = toolRegistry.list();
+    }
+
     // 6. Create SessionStorage
     const sessionStorage = new SessionStorage();
 

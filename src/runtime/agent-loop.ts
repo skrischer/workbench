@@ -423,7 +423,12 @@ export class AgentLoop {
    * Get tool definitions for LLM
    */
   private getToolDefinitions(): LLMToolDef[] {
-    const toolNames = this.config.tools ?? [];
+    // ✅ If no tools specified or empty array, use all available tools from registry
+    let toolNames = this.config.tools ?? [];
+    if (toolNames.length === 0) {
+      toolNames = this.toolRegistry.list();
+    }
+
     const definitions: LLMToolDef[] = [];
 
     for (const name of toolNames) {
