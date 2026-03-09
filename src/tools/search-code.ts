@@ -3,7 +3,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { BaseTool } from './base.js';
-import type { ToolResult } from '../types/index.js';
+import type { ToolResult, ToolContext } from '../types/index.js';
 import { walkDirectory } from './utils/ignore.js';
 
 /**
@@ -66,7 +66,7 @@ export class SearchCodeTool extends BaseTool {
     required: ['query'],
   };
 
-  async execute(input: Record<string, unknown>): Promise<ToolResult> {
+  async execute(input: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     const query = input.query as string;
     const searchPath = resolve(input.path as string || '.');
     const searchType = (input.type as SearchType) || 'all';

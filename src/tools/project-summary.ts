@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { BaseTool } from './base.js';
 import { walkDirectory } from './utils/ignore.js';
-import type { ToolResult } from '../types/index.js';
+import type { ToolResult, ToolContext } from '../types/index.js';
 
 /**
  * Structure to hold package.json data
@@ -36,7 +36,7 @@ export class ProjectSummaryTool extends BaseTool {
     },
   };
 
-  async execute(input: Record<string, unknown>): Promise<ToolResult> {
+  async execute(input: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     const projectPath = (input.path as string | undefined) || '.';
 
     try {

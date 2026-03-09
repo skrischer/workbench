@@ -23,7 +23,7 @@ export interface Tool {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
-  execute(input: Record<string, unknown>): Promise<ToolResult>;
+  execute(input: Record<string, unknown>, context?: import('./tool-context.js').ToolContext): Promise<ToolResult>;
 }
 
 export interface ToolResult {
@@ -247,3 +247,5 @@ export type {
 } from './workflow.js';
 // Error Types
 export { StorageError, NotFoundError, isNotFoundError, createNotFoundError } from './errors.js';
+// Tool Context Types
+export type { ToolContext } from './tool-context.js';

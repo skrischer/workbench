@@ -3,7 +3,7 @@
 import { stat } from 'node:fs/promises';
 import { basename, relative } from 'node:path';
 import { BaseTool } from './base.js';
-import type { ToolResult } from '../types/index.js';
+import type { ToolResult, ToolContext } from '../types/index.js';
 import { walkDirectory } from './utils/ignore.js';
 
 /**
@@ -54,7 +54,7 @@ export class ListFilesTool extends BaseTool {
     required: ['path'],
   };
 
-  async execute(input: Record<string, unknown>): Promise<ToolResult> {
+  async execute(input: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     const path = input.path as string;
     const depth = (input.depth as number | undefined) ?? 3;
     const pattern = input.pattern as string | undefined;

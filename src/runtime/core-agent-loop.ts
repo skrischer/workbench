@@ -13,6 +13,7 @@ import type {
   UserMessage,
   AssistantMessage,
   ToolResultMessage,
+  ToolContext,
 } from '../types/index.js';
 import type { AnthropicClient } from '../llm/anthropic-client.js';
 import type { SessionStorage } from '../storage/session-storage.js';
@@ -30,6 +31,8 @@ import { validateToolInput } from '../tools/validator.js';
  * 4. Repeats until completion or max steps
  */
 export class CoreAgentLoop {
+  private activeControllers: Map<string, AbortController> = new Map();
+
   constructor(
     private anthropicClient: AnthropicClient,
     private sessionStorage: SessionStorage,
@@ -47,6 +50,10 @@ export class CoreAgentLoop {
     // 1. Create session
     const session = await this.sessionStorage.create('agent-runtime');
     const runId = session.id;
+    
+    // Create AbortController for this run
+    const abortController = new AbortController();
+    this.activeControllers.set(runId, abortController);
     
     // Emit run:start event
     this.eventBus?.emit('run:start', {
@@ -153,7 +160,7 @@ export class CoreAgentLoop {
 
             // Execute tool and measure duration
             const startTime = performance.now();
-            const toolResult = await this.executeTool(toolUse);
+            const toolResult = await this.executeTool(toolUse, runId);
             const durationMs = performance.now() - startTime;
 
             // Emit tool:result event
@@ -243,7 +250,33 @@ export class CoreAgentLoop {
         tokenUsage: totalUsage,
         status,
       };
+    } finally {
+      // Clean up AbortController
+      this.activeControllers.delete(runId);
     }
+  }
+
+  /**
+   * Cancel a running agent execution
+   * @param runId - The run ID to cancel
+   * @returns true if the run was found and cancelled, false otherwise
+   */
+  cancel(runId: string): boolean {
+    const controller = this.activeControllers.get(runId);
+    if (controller) {
+      controller.abort();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Check if a run is currently active
+   * @param runId - The run ID to check
+   * @returns true if the run is active, false otherwise
+   */
+  isRunActive(runId: string): boolean {
+    return this.activeControllers.has(runId);
   }
 
   /**
@@ -328,7 +361,7 @@ export class CoreAgentLoop {
   /**
    * Execute a tool and return the result as ToolResultBlock
    */
-  private async executeTool(toolUse: ToolUseBlock): Promise<ToolResultBlock> {
+  private async executeTool(toolUse: ToolUseBlock, runId: string): Promise<ToolResultBlock> {
     try {
       const tool = this.toolRegistry.get(toolUse.name);
       
@@ -352,7 +385,18 @@ export class CoreAgentLoop {
         };
       }
 
-      const result = await tool.execute(toolUse.input);
+      // Build ToolContext with AbortSignal
+      const abortController = this.activeControllers.get(runId);
+      const context: ToolContext = {
+        signal: abortController?.signal,
+        eventBus: this.eventBus,
+        metadata: {
+          runId,
+          toolCallId: toolUse.id,
+        },
+      };
+
+      const result = await tool.execute(toolUse.input, context);
 
       return {
         type: 'tool_result',

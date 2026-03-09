@@ -1,7 +1,7 @@
 // src/tools/send-message.ts — Send Message Tool
 
 import { BaseTool } from './base.js';
-import type { ToolResult } from '../types/index.js';
+import type { ToolResult, ToolContext } from '../types/index.js';
 import type { MessageBus } from '../multi-agent/message-bus.js';
 import type { AgentMessage } from '../types/agent.js';
 
@@ -45,7 +45,7 @@ export class SendMessageTool extends BaseTool {
     this.bus = bus;
   }
 
-  async execute(input: Record<string, unknown>): Promise<ToolResult> {
+  async execute(input: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     try {
       const from = input.from as string;
       const to = input.to as string;
