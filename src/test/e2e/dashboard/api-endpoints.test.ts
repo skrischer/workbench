@@ -52,7 +52,7 @@ describe('Dashboard API Endpoints (inject)', () => {
   });
 
   describe('Sessions API', () => {
-    it('GET /api/sessions returns 200 with array', async () => {
+    it('GET /api/sessions returns 200 with paginated result', async () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/sessions',
@@ -61,7 +61,11 @@ describe('Dashboard API Endpoints (inject)', () => {
       expect(response.statusCode).toBe(200);
       
       const data = JSON.parse(response.body);
-      expect(Array.isArray(data)).toBe(true);
+      expect(data).toHaveProperty('data');
+      expect(data).toHaveProperty('total');
+      expect(data).toHaveProperty('offset');
+      expect(data).toHaveProperty('limit');
+      expect(Array.isArray(data.data)).toBe(true);
     });
 
     it('GET /api/sessions returns application/json content type', async () => {
@@ -76,7 +80,7 @@ describe('Dashboard API Endpoints (inject)', () => {
   });
 
   describe('Runs API', () => {
-    it('GET /api/runs returns 200 with array', async () => {
+    it('GET /api/runs returns 200 with paginated result', async () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/runs',
@@ -85,7 +89,11 @@ describe('Dashboard API Endpoints (inject)', () => {
       expect(response.statusCode).toBe(200);
       
       const data = JSON.parse(response.body);
-      expect(Array.isArray(data)).toBe(true);
+      expect(data).toHaveProperty('data');
+      expect(data).toHaveProperty('total');
+      expect(data).toHaveProperty('offset');
+      expect(data).toHaveProperty('limit');
+      expect(Array.isArray(data.data)).toBe(true);
     });
 
     it('GET /api/runs returns application/json content type', async () => {
@@ -100,7 +108,7 @@ describe('Dashboard API Endpoints (inject)', () => {
   });
 
   describe('Plans API', () => {
-    it('GET /api/plans returns 200 with array', async () => {
+    it('GET /api/plans returns 200 with paginated result', async () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/plans',
@@ -109,7 +117,11 @@ describe('Dashboard API Endpoints (inject)', () => {
       expect(response.statusCode).toBe(200);
       
       const data = JSON.parse(response.body);
-      expect(Array.isArray(data)).toBe(true);
+      expect(data).toHaveProperty('data');
+      expect(data).toHaveProperty('total');
+      expect(data).toHaveProperty('offset');
+      expect(data).toHaveProperty('limit');
+      expect(Array.isArray(data.data)).toBe(true);
     });
 
     it('GET /api/plans returns application/json content type', async () => {

@@ -48,14 +48,16 @@ describe('API Routes', () => {
   });
 
   describe('GET /api/runs', () => {
-    it('should return empty array when no runs exist', async () => {
+    it('should return empty result when no runs exist', async () => {
       const response = await fastify.inject({
         method: 'GET',
         url: '/api/runs',
       });
 
       expect(response.statusCode).toBe(200);
-      expect(JSON.parse(response.payload)).toEqual([]);
+      const result = JSON.parse(response.payload);
+      expect(result.data).toEqual([]);
+      expect(result.total).toBe(0);
     });
 
     it('should return list of runs with metadata', async () => {
@@ -76,17 +78,19 @@ describe('API Routes', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      const runs = JSON.parse(response.payload);
-      expect(runs).toHaveLength(2);
-      expect(runs[0].id).toBe('run-1');
-      expect(runs[0].status).toBe('completed');
-      expect(runs[0].tokenUsage).toEqual({
+      const result = JSON.parse(response.payload);
+      expect(result.data).toHaveLength(2);
+      expect(result.total).toBe(2);
+      const runs = result.data;
+      expect(runs[0].id).toBe('run-2'); // Note: sorted by date desc, so run-2 is first
+      expect(runs[0].status).toBe('failed');
+      expect(runs[1].id).toBe('run-1');
+      expect(runs[1].status).toBe('completed');
+      expect(runs[1].tokenUsage).toEqual({
         inputTokens: 100,
         outputTokens: 50,
         totalTokens: 150,
       });
-      expect(runs[1].id).toBe('run-2');
-      expect(runs[1].status).toBe('failed');
     });
   });
 
@@ -133,14 +137,16 @@ describe('API Routes', () => {
   });
 
   describe('GET /api/plans', () => {
-    it('should return empty array when no plans exist', async () => {
+    it('should return empty result when no plans exist', async () => {
       const response = await fastify.inject({
         method: 'GET',
         url: '/api/plans',
       });
 
       expect(response.statusCode).toBe(200);
-      expect(JSON.parse(response.payload)).toEqual([]);
+      const result = JSON.parse(response.payload);
+      expect(result.data).toEqual([]);
+      expect(result.total).toBe(0);
     });
 
     it('should return list of plans with metadata', async () => {
@@ -204,10 +210,15 @@ describe('API Routes', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      const plans = JSON.parse(response.payload);
-      expect(plans).toHaveLength(2);
-      expect(plans[0].id).toBe('plan-1');
-      expect(plans[0].title).toBe('Test Plan 1');
+      const result = JSON.parse(response.payload);
+      expect(result.data).toHaveLength(2);
+      expect(result.total).toBe(2);
+      const plans = result.data;
+      // Plans are sorted by createdAt desc, so order might be reversed
+      const foundPlan1 = plans.find((p: any) => p.id === 'plan-1');
+      const foundPlan2 = plans.find((p: any) => p.id === 'plan-2');
+      expect(foundPlan1).toBeDefined();
+      expect(foundPlan1.title).toBe('Test Plan 1');
       expect(plans[0].stepCount).toBe(1);
       expect(plans[1].id).toBe('plan-2');
       expect(plans[1].stepCount).toBe(2);
@@ -265,14 +276,16 @@ describe('API Routes', () => {
   });
 
   describe('GET /api/sessions', () => {
-    it('should return empty array when no sessions exist', async () => {
+    it('should return empty result when no sessions exist', async () => {
       const response = await fastify.inject({
         method: 'GET',
         url: '/api/sessions',
       });
 
       expect(response.statusCode).toBe(200);
-      expect(JSON.parse(response.payload)).toEqual([]);
+      const result = JSON.parse(response.payload);
+      expect(result.data).toEqual([]);
+      expect(result.total).toBe(0);
     });
 
     it('should return list of sessions with metadata', async () => {
@@ -292,8 +305,10 @@ describe('API Routes', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      const sessions = JSON.parse(response.payload);
-      expect(sessions).toHaveLength(2);
+      const result = JSON.parse(response.payload);
+      expect(result.data).toHaveLength(2);
+      expect(result.total).toBe(2);
+      const sessions = result.data;
       
       // Sort by agentId to ensure stable ordering (filesystem order may vary)
       const sortedSessions = sessions.sort((a: any, b: any) => 

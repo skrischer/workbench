@@ -59,17 +59,28 @@ function matchesPattern(pattern: string, eventName: string): boolean {
 }
 
 /**
- * Get WebSocket URL from environment or default
+ * Get WebSocket URL from environment or default (with optional token)
  */
 function getWebSocketUrl(): string {
+  let baseUrl: string;
+  
   if (import.meta.env.VITE_WS_URL) {
-    return import.meta.env.VITE_WS_URL;
+    baseUrl = import.meta.env.VITE_WS_URL;
+  } else {
+    // Auto-detect from current location
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    baseUrl = `${protocol}//${host}/ws`;
   }
   
-  // Auto-detect from current location
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const host = window.location.host;
-  return `${protocol}//${host}/ws`;
+  // Append token if configured
+  const token = import.meta.env.VITE_WS_TOKEN;
+  if (token) {
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    return `${baseUrl}${separator}token=${encodeURIComponent(token)}`;
+  }
+  
+  return baseUrl;
 }
 
 export interface UseWebSocketResult {

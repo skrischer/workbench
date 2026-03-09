@@ -8,6 +8,7 @@ import { runsRoutes } from './runs.js';
 import { plansRoutes } from './plans.js';
 import { sessionsRoutes } from './sessions.js';
 import { statsRoutes } from './stats.js';
+import { metricsRoutes } from './metrics.js';
 
 export interface RouteDependencies {
   runLogger: RunLogger;
@@ -45,5 +46,11 @@ export async function registerRoutes(
     runLogger: deps.runLogger,
     sessionStorage: deps.sessionStorage,
     planStorage: deps.planStorage,
+  });
+
+  // Register metrics routes (Prometheus-compatible)
+  await fastify.register(metricsRoutes, {
+    runLogger: deps.runLogger,
+    sessionStorage: deps.sessionStorage,
   });
 }

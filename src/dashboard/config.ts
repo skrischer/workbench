@@ -12,6 +12,13 @@ export interface DashboardConfig {
   
   /** CORS origin (default: '*') */
   corsOrigin?: string | string[] | RegExp;
+  
+  /** 
+   * WebSocket authentication token (default: null, no auth required)
+   * When set, clients must provide this token via `?token=XYZ` query parameter.
+   * Can be set via WORKBENCH_WS_TOKEN environment variable.
+   */
+  wsToken?: string | null;
 }
 
 /**
@@ -22,5 +29,6 @@ export function getDashboardConfig(config: DashboardConfig = {}): Required<Dashb
     port: config.port ?? 3000,
     host: config.host ?? '0.0.0.0',
     corsOrigin: config.corsOrigin ?? '*',
+    wsToken: config.wsToken ?? process.env.WORKBENCH_WS_TOKEN ?? null,
   };
 }

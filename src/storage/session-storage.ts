@@ -2,8 +2,9 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import type { Session, SessionStatus, StorageMessage } from '../types/index.js';
+import type { Session, SessionStatus, StorageMessage, StorageListOptions, StorageListResult } from '../types/index.js';
 import { createNotFoundError } from '../types/errors.js';
+import { normalizeListOptions } from '../types/index.js';
 
 /**
  * SessionStorage — Manages session persistence as JSON files
@@ -122,9 +123,12 @@ export class SessionStorage {
 
   /**
    * List all sessions with metadata (no full message load)
-   * @returns Array of session metadata
+   * @param options - Pagination options (offset, limit, sort)
+   * @returns Paginated result with session metadata
    */
-  async list(): Promise<Array<{ id: string; agentId: string; status: SessionStatus; createdAt: string; updatedAt: string; messageCount: number }>> {
+  async list(options?: StorageListOptions): Promise<StorageListResult<{ id: string; agentId: string; status: SessionStatus; createdAt: string; updatedAt: string; messageCount: number }>> {
+    const { offset, limit, sort } = normalizeListOptions(options);
+
     try {
       // Read all subdirectories in baseDir
       const entries = await fs.readdir(this.baseDir, { withFileTypes: true });
@@ -152,14 +156,29 @@ export class SessionStorage {
         })
       );
 
-      // Filter out nulls and return
-      return metadataList.filter((metadata): metadata is NonNullable<typeof metadata> => metadata !== null);
+      // Filter out nulls
+      const validMetadata = metadataList.filter((metadata): metadata is NonNullable<typeof metadata> => metadata !== null);
+
+      // Sort by createdAt
+      validMetadata.sort((a, b) => {
+        const dateA = new Date(a.createdAt).getTime();
+        const dateB = new Date(b.createdAt).getTime();
+        return sort === 'desc' ? dateB - dateA : dateA - dateB;
+      });
+
+      // Get total count
+      const total = validMetadata.length;
+
+      // Apply pagination
+      const data = validMetadata.slice(offset, offset + limit);
+
+      return { data, total, offset, limit };
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error) {
         const err = error as NodeJS.ErrnoException;
         if (err.code === 'ENOENT') {
-          // Base directory doesn't exist yet, return empty list
-          return [];
+          // Base directory doesn't exist yet, return empty result
+          return { data: [], total: 0, offset, limit };
         }
       }
       throw new Error(`Failed to list sessions: ${error}`);

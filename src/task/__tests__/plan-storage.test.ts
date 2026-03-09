@@ -148,8 +148,10 @@ describe('PlanStorage', () => {
     await storage.create(plan2);
 
     // List plans
-    const list = await storage.list();
+    const result = await storage.list();
+    const list = result.data;
     expect(list.length).toBe(2);
+    expect(result.total).toBe(2);
 
     // Verify metadata
     const listed1 = list.find((p) => p.id === 'plan-1');
@@ -202,7 +204,8 @@ describe('PlanStorage', () => {
   });
 
   it('should return empty list when no plans exist', async () => {
-    const list = await storage.list();
-    expect(list).toEqual([]);
+    const result = await storage.list();
+    expect(result.data).toEqual([]);
+    expect(result.total).toBe(0);
   });
 });
