@@ -57,7 +57,7 @@ export class AnthropicClient {
       response = await fetch(this.config.apiUrl, {
         method: 'POST',
         headers: {
-          'x-api-key': accessToken,
+          'Authorization': `Bearer ${accessToken}`,
           'anthropic-version': '2023-06-01',
           'Content-Type': 'application/json',
           'anthropic-beta': 'oauth-2025-04-20,claude-code-20250219'
