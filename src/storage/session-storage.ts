@@ -111,6 +111,7 @@ export class SessionStorage {
       role: message.role === 'tool_result' ? ('tool' as const) : message.role,
       content: message.content,
       toolCallId: 'toolCallId' in message ? message.toolCallId : undefined,
+      toolUses: 'toolUses' in message ? message.toolUses : undefined,
       timestamp: message.timestamp,
     };
 

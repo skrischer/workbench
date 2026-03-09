@@ -39,6 +39,7 @@ export interface Message {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
   toolCallId?: string;
+  toolUses?: ToolUseBlock[]; // Tool use blocks (for assistant messages with tool calls)
   timestamp: string;
 }
 
@@ -53,6 +54,7 @@ export interface UserMessage {
 export interface AssistantMessage {
   role: 'assistant';
   content: string;
+  toolUses?: ToolUseBlock[]; // Tool use blocks from LLM response (if any)
   timestamp: string;
 }
 
