@@ -1,4 +1,4 @@
-// src/cli/__tests__/auth-command.test.ts — Auth Command Tests
+// src/cli/__tests__/auth-command.test.ts — Auth Command Tests (PKCE OAuth)
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createAuthCommand } from '../auth-command.js';
@@ -10,6 +10,8 @@ let mockQuestion = vi.fn();
 let mockClose = vi.fn();
 let mockLoad = vi.fn();
 let mockSave = vi.fn();
+let mockFetch = vi.fn();
+let mockEnsureValidToken = vi.fn();
 
 // Mock readline
 vi.mock('node:readline/promises', () => ({
@@ -26,6 +28,16 @@ vi.mock('../../llm/token-storage.js', () => ({
     save = mockSave;
   },
 }));
+
+// Mock TokenRefresher
+vi.mock('../../llm/token-refresh.js', () => ({
+  TokenRefresher: class MockTokenRefresher {
+    ensureValidToken = mockEnsureValidToken;
+  },
+}));
+
+// Mock global fetch
+global.fetch = mockFetch as never;
 
 describe('Auth Command', () => {
   let command: Command;
@@ -62,92 +74,108 @@ describe('Auth Command', () => {
     expect(command.description().toLowerCase()).toContain('oauth');
   });
 
-  describe('Interactive Auth (Happy Path)', () => {
-    it('should prompt for tokens and save valid tokens', async () => {
-      // Mock user input
-      mockQuestion
-        .mockResolvedValueOnce('sk-ant-oat01-validaccesstoken1234567890')
-        .mockResolvedValueOnce('sk-ant-ort01-validrefreshtoken1234567890');
+  describe('Interactive Auth (PKCE Flow)', () => {
+    it('should show OAuth URL and exchange code for tokens', async () => {
+      // Mock OAuth token response
+      const mockTokenResponse = {
+        access_token: 'sk-ant-oat01-newlyissuedaccesstoken123',
+        refresh_token: 'sk-ant-ort01-newlyissuedrefreshtoken123',
+        expires_in: 3600
+      };
+      
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => mockTokenResponse
+      });
+
+      // Mock user input (code#state string)
+      mockQuestion.mockResolvedValueOnce('authcode123abc#statexyz789def');
 
       // Parse command (triggers default action)
       await command.parseAsync([], { from: 'user' });
 
-      // Verify prompts were shown
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('OAuth Token Setup'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('https://console.anthropic.com'));
+      // Verify OAuth URL was shown
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('OAuth PKCE Setup'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('https://claude.ai/oauth/authorize'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('code_challenge'));
+
+      // Verify fetch was called to token endpoint
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('oauth/token'),
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('authorization_code')
+        })
+      );
 
       // Verify tokens were saved
       expect(mockSave).toHaveBeenCalledWith(
         expect.objectContaining({
           anthropic: expect.objectContaining({
             type: 'oauth',
-            access: 'sk-ant-oat01-validaccesstoken1234567890',
-            refresh: 'sk-ant-ort01-validrefreshtoken1234567890',
+            access: 'sk-ant-oat01-newlyissuedaccesstoken123',
+            refresh: 'sk-ant-ort01-newlyissuedrefreshtoken123',
             expires: expect.any(Number),
           }),
         })
       );
 
       // Verify success message
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('✅ Tokens validated and saved'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('90 days'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('✅ OAuth tokens saved'));
 
       // Verify readline was closed
       expect(mockClose).toHaveBeenCalled();
     });
-  });
 
-  describe('Token Validation', () => {
-    it('should reject invalid Access Token prefix', async () => {
-      // First attempt: invalid prefix
-      // Second attempt: valid tokens
-      mockQuestion
-        .mockResolvedValueOnce('sk-ant-invalid-token')
-        .mockResolvedValueOnce('sk-ant-oat01-validaccesstoken1234567890')
-        .mockResolvedValueOnce('sk-ant-ort01-validrefreshtoken1234567890');
+    it('should reject invalid code#state format', async () => {
+      // Mock user input without # separator
+      mockQuestion.mockResolvedValueOnce('invalidformatnohashtag');
 
-      await command.parseAsync([], { from: 'user' });
-
-      // Verify error was shown for first attempt
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('❌'));
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('sk-ant-oat01-'));
-
-      // Verify tokens were eventually saved
-      expect(mockSave).toHaveBeenCalled();
-    });
-
-    it('should reject invalid Refresh Token prefix', async () => {
-      // Valid access token, then invalid refresh, then valid refresh
-      mockQuestion
-        .mockResolvedValueOnce('sk-ant-oat01-validaccesstoken1234567890')
-        .mockResolvedValueOnce('sk-ant-invalid-refresh')
-        .mockResolvedValueOnce('sk-ant-ort01-validrefreshtoken1234567890');
-
-      await command.parseAsync([], { from: 'user' });
-
-      // Verify error was shown for invalid refresh token
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('❌'));
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('sk-ant-ort01-'));
-
-      // Verify tokens were eventually saved
-      expect(mockSave).toHaveBeenCalled();
-    });
-
-    it('should reject tokens that are too short', async () => {
-      // Too short, then valid
-      mockQuestion
-        .mockResolvedValueOnce('sk-ant-oat01-short')
-        .mockResolvedValueOnce('sk-ant-oat01-validaccesstoken1234567890')
-        .mockResolvedValueOnce('sk-ant-ort01-validrefreshtoken1234567890');
-
-      await command.parseAsync([], { from: 'user' });
+      try {
+        await command.parseAsync([], { from: 'user' });
+      } catch (error) {
+        expect(String(error)).toContain('process.exit');
+      }
 
       // Verify error was shown
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('❌'));
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('too short'));
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid format'));
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('code#state'));
+    });
 
-      // Verify tokens were eventually saved
-      expect(mockSave).toHaveBeenCalled();
+    it('should handle token exchange failure', async () => {
+      // Mock failed token exchange
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        text: async () => 'Invalid authorization code'
+      });
+
+      mockQuestion.mockResolvedValueOnce('badcode123#badstate456');
+
+      try {
+        await command.parseAsync([], { from: 'user' });
+      } catch (error) {
+        expect(String(error)).toContain('process.exit');
+      }
+
+      // Verify error was shown
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Auth setup failed'));
+    });
+
+    it('should handle network errors during token exchange', async () => {
+      // Mock network error
+      mockFetch.mockRejectedValue(new Error('Network timeout'));
+
+      mockQuestion.mockResolvedValueOnce('code123#state456');
+
+      try {
+        await command.parseAsync([], { from: 'user' });
+      } catch (error) {
+        expect(String(error)).toContain('process.exit');
+      }
+
+      // Verify error was shown
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Auth setup failed'));
     });
   });
 
@@ -175,6 +203,24 @@ describe('Auth Command', () => {
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringMatching(/Expires in: \d+ days/));
     });
 
+    it('should show hours/minutes for tokens expiring soon', async () => {
+      // Mock tokens expiring in 2 hours
+      const mockTokens: TokenFile = {
+        anthropic: {
+          type: 'oauth',
+          access: 'sk-ant-oat01-expiringsoon1234567890',
+          refresh: 'sk-ant-ort01-expiringsoon1234567890',
+          expires: Date.now() + 2 * 60 * 60 * 1000,
+        },
+      };
+      mockLoad.mockResolvedValue(mockTokens);
+
+      await command.parseAsync(['status'], { from: 'user' });
+
+      // Verify hours/minutes format
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringMatching(/Expires in: \d+ hours, \d+ minutes/));
+    });
+
     it('should warn about expired tokens', async () => {
       // Mock expired tokens (expired 5 days ago)
       const mockTokens: TokenFile = {
@@ -191,8 +237,8 @@ describe('Auth Command', () => {
 
       // Verify expiry warning
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('⚠️'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('expired'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringMatching(/\d+ days ago/));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Expired'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringMatching(/Expired \d+ hours ago/));
     });
 
     it('should handle missing token file', async () => {
@@ -212,19 +258,14 @@ describe('Auth Command', () => {
   });
 
   describe('Refresh Command', () => {
-    it('should refresh tokens when refresh token exists', async () => {
-      // Mock valid tokens
-      const mockTokens: TokenFile = {
-        anthropic: {
-          type: 'oauth',
-          access: 'sk-ant-oat01-validaccesstoken1234567890',
-          refresh: 'sk-ant-ort01-validrefreshtoken1234567890',
-          expires: Date.now() + 30 * 24 * 60 * 60 * 1000,
-        },
-      };
-      mockLoad.mockResolvedValue(mockTokens);
+    it('should use TokenRefresher to refresh tokens', async () => {
+      // Mock successful refresh
+      mockEnsureValidToken.mockResolvedValue('sk-ant-oat01-refreshedtoken123');
 
       await command.parseAsync(['refresh'], { from: 'user' });
+
+      // Verify refresh was called
+      expect(mockEnsureValidToken).toHaveBeenCalled();
 
       // Verify refresh message
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Refreshing tokens'));
@@ -233,7 +274,7 @@ describe('Auth Command', () => {
 
     it('should handle missing token file during refresh', async () => {
       // Mock token file not found
-      mockLoad.mockRejectedValue(new Error('Token file not found'));
+      mockEnsureValidToken.mockRejectedValue(new Error('Token file not found'));
 
       try {
         await command.parseAsync(['refresh'], { from: 'user' });
@@ -242,18 +283,42 @@ describe('Auth Command', () => {
       }
 
       // Verify error message
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('❌ No refresh token found'));
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('❌ No tokens found'));
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Run: workbench auth'));
+    });
+
+    it('should handle refresh API errors', async () => {
+      // Mock refresh failure
+      mockEnsureValidToken.mockRejectedValue(new Error('Refresh token expired or invalid'));
+
+      try {
+        await command.parseAsync(['refresh'], { from: 'user' });
+      } catch (error) {
+        expect(String(error)).toContain('process.exit');
+      }
+
+      // Verify error message
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('❌ Refresh failed'));
     });
   });
 
   describe('File Operations', () => {
-    it('should save tokens with correct expiry timestamp', async () => {
+    it('should save tokens with correct expiry timestamp (with buffer)', async () => {
       const beforeTimestamp = Date.now();
 
-      mockQuestion
-        .mockResolvedValueOnce('sk-ant-oat01-validaccesstoken1234567890')
-        .mockResolvedValueOnce('sk-ant-ort01-validrefreshtoken1234567890');
+      // Mock OAuth token response (1 hour expiry)
+      const mockTokenResponse = {
+        access_token: 'sk-ant-oat01-newtoken123',
+        refresh_token: 'sk-ant-ort01-newtoken123',
+        expires_in: 3600 // 1 hour
+      };
+      
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => mockTokenResponse
+      });
+
+      mockQuestion.mockResolvedValueOnce('code123#state456');
 
       await command.parseAsync([], { from: 'user' });
 
@@ -261,30 +326,11 @@ describe('Auth Command', () => {
       const savedTokens = mockSave.mock.calls[0][0] as TokenFile;
       const expiresTimestamp = savedTokens.anthropic.expires;
 
-      // Verify expiry is approximately 90 days from now
-      const expectedExpiry = beforeTimestamp + 90 * 24 * 60 * 60 * 1000;
+      // Verify expiry is approximately 1 hour - 5 min buffer from now
+      const expectedExpiry = beforeTimestamp + (3600 * 1000) - (5 * 60 * 1000);
       const tolerance = 5000; // 5 seconds tolerance
       expect(expiresTimestamp).toBeGreaterThanOrEqual(expectedExpiry - tolerance);
       expect(expiresTimestamp).toBeLessThanOrEqual(expectedExpiry + tolerance);
-    });
-
-    it('should trim whitespace from tokens', async () => {
-      // Mock tokens with leading/trailing whitespace
-      mockQuestion
-        .mockResolvedValueOnce('  sk-ant-oat01-validaccesstoken1234567890  ')
-        .mockResolvedValueOnce('\tsk-ant-ort01-validrefreshtoken1234567890\n');
-
-      await command.parseAsync([], { from: 'user' });
-
-      // Verify tokens were trimmed before saving
-      expect(mockSave).toHaveBeenCalledWith(
-        expect.objectContaining({
-          anthropic: expect.objectContaining({
-            access: 'sk-ant-oat01-validaccesstoken1234567890',
-            refresh: 'sk-ant-ort01-validrefreshtoken1234567890',
-          }),
-        })
-      );
     });
   });
 });

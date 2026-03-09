@@ -1,52 +1,72 @@
-// src/cli/auth-command.ts — Interactive OAuth Token Setup
+// src/cli/auth-command.ts — Interactive OAuth PKCE Setup
 
 import { Command } from 'commander';
 import * as readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { TokenStorage } from '../llm/token-storage.js';
+import { TokenRefresher } from '../llm/token-refresh.js';
+import { ANTHROPIC_CLIENT_ID, ANTHROPIC_TOKEN_URL, TOKEN_REFRESH_BUFFER_MS } from '../llm/constants.js';
 import type { TokenFile } from '../types/index.js';
 
-const ANTHROPIC_CONSOLE_URL = 'https://console.anthropic.com/settings/api-keys';
-const ACCESS_TOKEN_PREFIX = 'sk-ant-oat01-';
-const REFRESH_TOKEN_PREFIX = 'sk-ant-ort01-';
-const MIN_TOKEN_LENGTH = 30;
-const REFRESH_TOKEN_EXPIRY_DAYS = 90;
+const AUTHORIZE_URL = 'https://claude.ai/oauth/authorize';
+const REDIRECT_URI = 'https://console.anthropic.com/oauth/code/callback';
+const SCOPES = 'org:create_api_key user:profile user:inference';
 
 /**
- * Validate token format
+ * Generate PKCE parameters (verifier and challenge)
  */
-function validateAccessToken(token: string): { valid: boolean; error?: string } {
-  if (!token.startsWith(ACCESS_TOKEN_PREFIX)) {
-    return { 
-      valid: false, 
-      error: `Invalid token format. Access Token must start with ${ACCESS_TOKEN_PREFIX}` 
-    };
-  }
-  if (token.length < MIN_TOKEN_LENGTH) {
-    return { 
-      valid: false, 
-      error: `Token too short. Expected at least ${MIN_TOKEN_LENGTH} characters` 
-    };
-  }
-  return { valid: true };
+function generatePKCE(): { verifier: string; challenge: string } {
+  // 1. Generate 32 random bytes
+  const randomBytes = crypto.randomBytes(32);
+  
+  // 2. Create verifier: Base64URL-encoding
+  const verifier = randomBytes.toString('base64url');
+  
+  // 3. Create challenge: SHA256 hash of verifier, Base64URL-encoded
+  const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+  
+  return { verifier, challenge };
 }
 
-function validateRefreshToken(token: string): { valid: boolean; error?: string } {
-  if (!token.startsWith(REFRESH_TOKEN_PREFIX)) {
-    return { 
-      valid: false, 
-      error: `Invalid token format. Refresh Token must start with ${REFRESH_TOKEN_PREFIX}` 
-    };
+/**
+ * Exchange authorization code for tokens
+ */
+async function exchangeCodeForTokens(
+  code: string,
+  state: string,
+  verifier: string
+): Promise<{ access_token: string; refresh_token: string; expires_in: number }> {
+  const requestBody = {
+    grant_type: 'authorization_code',
+    client_id: ANTHROPIC_CLIENT_ID,
+    code,
+    state,
+    redirect_uri: REDIRECT_URI,
+    code_verifier: verifier
+  };
+
+  let response: Response;
+  try {
+    response = await fetch(ANTHROPIC_TOKEN_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    });
+  } catch (error) {
+    throw new Error(`Network error during token exchange: ${error}`);
   }
-  if (token.length < MIN_TOKEN_LENGTH) {
-    return { 
-      valid: false, 
-      error: `Token too short. Expected at least ${MIN_TOKEN_LENGTH} characters` 
-    };
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => 'Unknown error');
+    throw new Error(`Token exchange failed with status ${response.status}: ${errorText}`);
   }
-  return { valid: true };
+
+  return await response.json();
 }
 
 /**
@@ -60,73 +80,97 @@ function maskToken(token: string): string {
 }
 
 /**
- * Calculate days until expiry
+ * Format time until expiry in human-readable format
  */
-function daysUntilExpiry(expiresTimestamp: number): number {
+function formatTimeUntilExpiry(expiresTimestamp: number): string {
   const now = Date.now();
   const msUntilExpiry = expiresTimestamp - now;
-  return Math.floor(msUntilExpiry / (1000 * 60 * 60 * 24));
+  
+  if (msUntilExpiry < 0) {
+    const hoursAgo = Math.floor(Math.abs(msUntilExpiry) / (1000 * 60 * 60));
+    return `⚠️  Expired ${hoursAgo} hours ago`;
+  }
+  
+  const hours = Math.floor(msUntilExpiry / (1000 * 60 * 60));
+  const minutes = Math.floor((msUntilExpiry % (1000 * 60 * 60)) / (1000 * 60));
+  
+  if (hours > 24) {
+    const days = Math.floor(hours / 24);
+    return `${days} days`;
+  } else if (hours > 0) {
+    return `${hours} hours, ${minutes} minutes`;
+  } else {
+    return `${minutes} minutes`;
+  }
 }
 
 /**
- * Interactive token setup
+ * Interactive OAuth PKCE setup
  */
 async function interactiveAuth(): Promise<void> {
-  console.log('📝 OAuth Token Setup\n');
+  console.log('📝 OAuth PKCE Setup\n');
+  
+  // Generate PKCE parameters
+  const { verifier, challenge } = generatePKCE();
+  
+  // Build authorization URL
+  const authUrl = new URL(AUTHORIZE_URL);
+  authUrl.searchParams.set('code', 'true');
+  authUrl.searchParams.set('client_id', ANTHROPIC_CLIENT_ID);
+  authUrl.searchParams.set('response_type', 'code');
+  authUrl.searchParams.set('redirect_uri', REDIRECT_URI);
+  authUrl.searchParams.set('scope', SCOPES);
+  authUrl.searchParams.set('code_challenge', challenge);
+  authUrl.searchParams.set('code_challenge_method', 'S256');
+  authUrl.searchParams.set('state', verifier);
+  
   console.log('Please follow these steps:');
-  console.log(`1. Visit: ${ANTHROPIC_CONSOLE_URL}`);
-  console.log('2. Generate OAuth tokens with scopes: claude:chat claude:refresh');
-  console.log('3. Copy the Access Token and Refresh Token\n');
-
+  console.log(`1. Visit this URL:\n   ${authUrl.toString()}\n`);
+  console.log('2. Authorize the application in your browser');
+  console.log('3. After redirect, copy the full code#state string from the callback URL\n');
+  console.log('   Example: abc123def456...#xyz789abc123...\n');
+  
   const rl = readline.createInterface({ input, output });
-
+  
   try {
-    // Prompt for Access Token
-    let accessToken = '';
-    let validAccess = false;
-    while (!validAccess) {
-      accessToken = await rl.question(`? Access Token (starts with ${ACCESS_TOKEN_PREFIX}): `);
-      const validation = validateAccessToken(accessToken.trim());
-      if (validation.valid) {
-        validAccess = true;
-      } else {
-        console.error(`❌ ${validation.error}\n`);
-      }
+    // Prompt for code#state
+    const codeState = await rl.question('? Enter code#state string: ');
+    
+    if (!codeState.includes('#')) {
+      throw new Error('Invalid format. Expected code#state string with # separator');
     }
-
-    // Prompt for Refresh Token
-    let refreshToken = '';
-    let validRefresh = false;
-    while (!validRefresh) {
-      refreshToken = await rl.question(`? Refresh Token (starts with ${REFRESH_TOKEN_PREFIX}): `);
-      const validation = validateRefreshToken(refreshToken.trim());
-      if (validation.valid) {
-        validRefresh = true;
-      } else {
-        console.error(`❌ ${validation.error}\n`);
-      }
+    
+    const [code, state] = codeState.trim().split('#');
+    
+    if (!code || !state) {
+      throw new Error('Missing code or state component');
     }
-
+    
+    console.log('\n⏳ Exchanging authorization code for tokens...');
+    
+    // Exchange code for tokens
+    const tokenData = await exchangeCodeForTokens(code, state, verifier);
+    
+    // Calculate expiry with buffer
+    const expiresAtMs = Date.now() + (tokenData.expires_in * 1000) - TOKEN_REFRESH_BUFFER_MS;
+    
     // Save tokens
     const tokenPath = path.join(homedir(), '.workbench', 'tokens.json');
     const storage = new TokenStorage(tokenPath);
     
-    // Calculate expiry (90 days from now)
-    const expiresTimestamp = Date.now() + (REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
-    
     const tokens: TokenFile = {
       anthropic: {
         type: 'oauth',
-        access: accessToken.trim(),
-        refresh: refreshToken.trim(),
-        expires: expiresTimestamp,
-      },
+        access: tokenData.access_token,
+        refresh: tokenData.refresh_token,
+        expires: expiresAtMs
+      }
     };
-
+    
     await storage.save(tokens);
-
-    console.log(`\n✅ Tokens validated and saved to ${tokenPath}`);
-    console.log(`Refresh expires in: ${REFRESH_TOKEN_EXPIRY_DAYS} days`);
+    
+    console.log(`\n✅ OAuth tokens saved to ${tokenPath}`);
+    console.log(`Access token expires in: ${formatTimeUntilExpiry(expiresAtMs)}`);
   } finally {
     rl.close();
   }
@@ -147,52 +191,35 @@ async function showStatus(): Promise<void> {
     console.log(`Access Token: ${maskToken(anthropic.access)}`);
     console.log(`Refresh Token: ${maskToken(anthropic.refresh)}`);
     console.log(`Token file: ${tokenPath}`);
-
-    // Check if tokens are expired
-    const days = daysUntilExpiry(anthropic.expires);
-    if (days < 0) {
-      console.log(`⚠️  Tokens expired ${Math.abs(days)} days ago`);
-      console.log('Run: workbench auth refresh');
-    } else if (days < 7) {
-      console.log(`⚠️  Tokens expire in ${days} days`);
-    } else {
-      console.log(`Expires in: ${days} days`);
-    }
+    console.log(`Expires in: ${formatTimeUntilExpiry(anthropic.expires)}`);
   } catch (error) {
-    console.error('❌ No tokens configured');
-    console.log('Run: workbench auth');
-    process.exit(1);
+    if (error instanceof Error && error.message.includes('not found')) {
+      console.error('❌ No tokens configured');
+      console.log('Run: workbench auth');
+      process.exit(1);
+    }
+    throw error;
   }
 }
 
 /**
- * Refresh tokens (placeholder - requires API implementation)
+ * Refresh tokens using OAuth refresh flow
  */
 async function refreshTokens(): Promise<void> {
   const tokenPath = path.join(homedir(), '.workbench', 'tokens.json');
   const storage = new TokenStorage(tokenPath);
+  const refresher = new TokenRefresher(storage);
 
   try {
-    const tokens = await storage.load();
-    const { anthropic } = tokens;
-
-    if (!anthropic.refresh) {
-      throw new Error('No refresh token found');
-    }
-
-    console.log('Refreshing tokens...');
+    console.log('⏳ Refreshing tokens...');
     
-    // TODO: Implement actual OAuth refresh flow
-    // For now, just simulate success
+    // TokenRefresher.ensureValidToken() handles the complete refresh flow
+    await refresher.ensureValidToken();
+    
     console.log('✅ Tokens refreshed successfully');
-    
-    // Note: In real implementation, this would:
-    // 1. Call Anthropic OAuth refresh endpoint with refresh token
-    // 2. Get new access token and updated expiry
-    // 3. Save updated tokens via storage.save()
   } catch (error) {
     if (error instanceof Error && error.message.includes('not found')) {
-      console.error('❌ No refresh token found');
+      console.error('❌ No tokens found');
       console.log('Run: workbench auth');
     } else {
       console.error(`❌ Refresh failed: ${error}`);
