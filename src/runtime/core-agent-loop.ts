@@ -20,6 +20,7 @@ import type { SessionStorage } from '../storage/session-storage.js';
 import type { ToolRegistry } from '../tools/registry.js';
 import type { TypedEventBus } from '../events/event-bus.js';
 import { validateToolInput } from '../tools/validator.js';
+import { PermissionGuard, PermissionError } from '../tools/permissions.js';
 
 /**
  * AgentLoop — Core agent runtime loop
@@ -32,6 +33,7 @@ import { validateToolInput } from '../tools/validator.js';
  */
 export class CoreAgentLoop {
   private activeControllers: Map<string, AbortController> = new Map();
+  private permissionGuard?: PermissionGuard;
 
   constructor(
     private anthropicClient: AnthropicClient,
@@ -39,7 +41,12 @@ export class CoreAgentLoop {
     private toolRegistry: ToolRegistry,
     private config: AgentConfig,
     private eventBus?: TypedEventBus
-  ) {}
+  ) {
+    // Initialize permission guard if allowedPaths are configured
+    if (config.allowedPaths && config.allowedPaths.length > 0) {
+      this.permissionGuard = new PermissionGuard(config.allowedPaths);
+    }
+  }
 
   /**
    * Run the agent with a user prompt
@@ -385,10 +392,32 @@ export class CoreAgentLoop {
         };
       }
 
-      // Build ToolContext with AbortSignal
+      // PERMISSION CHECK MIDDLEWARE — Check path permissions before execution
+      if (this.permissionGuard && this.isWritingTool(toolUse.name)) {
+        const targetPath = this.extractTargetPath(toolUse.name, toolUse.input);
+        
+        if (targetPath) {
+          try {
+            this.permissionGuard.checkPath(targetPath);
+          } catch (error) {
+            if (error instanceof PermissionError) {
+              return {
+                type: 'tool_result',
+                tool_use_id: toolUse.id,
+                content: `Permission denied: ${error.message}`,
+                is_error: true,
+              };
+            }
+            throw error; // Re-throw if it's not a PermissionError
+          }
+        }
+      }
+
+      // Build ToolContext with AbortSignal and PermissionGuard
       const abortController = this.activeControllers.get(runId);
       const context: ToolContext = {
         signal: abortController?.signal,
+        permissions: this.permissionGuard,
         eventBus: this.eventBus,
         metadata: {
           runId,
@@ -424,5 +453,33 @@ export class CoreAgentLoop {
       .map(block => block.text);
     
     return textBlocks.join('\n');
+  }
+
+  /**
+   * Check if a tool is a writing tool that needs permission checks
+   */
+  private isWritingTool(toolName: string): boolean {
+    // Known writing tools by name
+    const writingTools = [
+      'write_file',
+      'edit_file',
+      'apply_patch',
+      'exec', // exec can modify files via cwd
+    ];
+    
+    return writingTools.includes(toolName);
+  }
+
+  /**
+   * Extract target path from tool input for permission checking
+   */
+  private extractTargetPath(toolName: string, input: Record<string, unknown>): string | null {
+    // Different tools have different path parameters
+    if (toolName === 'exec') {
+      return (input.cwd as string) || null;
+    }
+    
+    // Most file tools use 'path' parameter
+    return (input.path as string) || null;
   }
 }

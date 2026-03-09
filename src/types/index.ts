@@ -6,6 +6,7 @@ export interface AgentConfig {
   systemPrompt: string;
   tools?: string[]; // Tool name whitelist
   maxSteps: number;
+  allowedPaths?: string[]; // Optional path allowlist with glob patterns
 }
 
 /** Agent instance (runtime entity with ID) */

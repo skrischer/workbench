@@ -1,6 +1,7 @@
 // src/types/tool-context.ts — Cross-cutting Tool Context
 
 import type { TypedEventBus } from '../events/event-bus.js';
+import type { PermissionGuard } from '../tools/permissions.js';
 
 /**
  * ToolContext consolidates cross-cutting concerns passed to tool execution.
@@ -14,10 +15,10 @@ export interface ToolContext {
   signal?: AbortSignal;
 
   /**
-   * Permission context for authorization checks.
-   * Reserved for future use.
+   * Permission guard for path-based access control.
+   * Tools that access files should check paths against this guard.
    */
-  permissions?: Record<string, unknown>;
+  permissions?: PermissionGuard;
 
   /**
    * Event bus for emitting tool-specific events.
