@@ -103,6 +103,18 @@ export async function runPlanCommand(planId: string, options: RunPlanCommandOpti
     // 4. Create StepRunner that uses CoreAgentLoop with RunLogger hooks
     const stepRunner = async (step: Step): Promise<StepResult> => {
       const startTime = Date.now();
+      
+      // Track files modified during this step
+      const filesModified: string[] = [];
+      const unsubscribe = eventBus.on('tool:call', (event) => {
+        if (['write_file', 'write', 'edit_file', 'edit'].includes(event.toolName)) {
+          const input = event.input as Record<string, unknown>;
+          const filePath = input?.path || input?.file_path;
+          if (filePath && typeof filePath === 'string' && !filesModified.includes(filePath)) {
+            filesModified.push(filePath);
+          }
+        }
+      });
 
       try {
         // Create agent config for this step
@@ -110,6 +122,7 @@ export async function runPlanCommand(planId: string, options: RunPlanCommandOpti
           model,
           maxSteps: step.maxSteps ?? 10,
           systemPrompt: 'You are a helpful AI assistant executing a plan step.',
+          tools: toolRegistry.list(), // ✅ CRITICAL: Ensure tools are available to agent
         };
 
         // Define RunLogger hooks for this step
@@ -163,6 +176,9 @@ export async function runPlanCommand(planId: string, options: RunPlanCommandOpti
         // Run the step
         const result = await agentLoop.run(step.prompt);
 
+        // Clean up event listener
+        unsubscribe();
+        
         // Return step result
         return {
           output: result.finalResponse,
@@ -174,11 +190,14 @@ export async function runPlanCommand(planId: string, options: RunPlanCommandOpti
             totalTokens: result.tokenUsage.input_tokens + result.tokenUsage.output_tokens,
             stepCount: result.steps,
           },
-          filesModified: [], // TODO: Track file modifications
+          filesModified, // ✅ Track file modifications via event bus
           durationMs: Date.now() - startTime,
           error: result.status === 'failed' ? 'Agent execution failed' : undefined,
         };
       } catch (error) {
+        // Clean up event listener
+        unsubscribe();
+        
         const message = error instanceof Error ? error.message : String(error);
         return {
           output: '',
@@ -190,7 +209,7 @@ export async function runPlanCommand(planId: string, options: RunPlanCommandOpti
             totalTokens: 0,
             stepCount: 0,
           },
-          filesModified: [],
+          filesModified, // ✅ Return tracked files even on error
           durationMs: Date.now() - startTime,
           error: message,
         };

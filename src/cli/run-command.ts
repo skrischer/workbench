@@ -98,7 +98,10 @@ class LoggingToolRegistry extends ToolRegistry {
  */
 export async function runCommand(prompt: string, options: RunCommandOptions): Promise<void> {
   try {
-    // 1. Load agent config (with CLI overrides)
+    // 1. Create ToolRegistry early (needed for config validation)
+    const baseRegistry = createDefaultTools();
+    
+    // 2. Load agent config (with CLI overrides)
     let agentConfig: AgentConfig;
     try {
       agentConfig = await loadAgentConfig(options.config);
@@ -110,13 +113,18 @@ export async function runCommand(prompt: string, options: RunCommandOptions): Pr
       if (options.maxSteps !== undefined) {
         agentConfig.maxSteps = options.maxSteps;
       }
+      
+      // ✅ CRITICAL: Ensure tools are populated
+      if (!agentConfig.tools || agentConfig.tools.length === 0) {
+        agentConfig.tools = baseRegistry.list();
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`❌ Failed to load agent config: ${message}`);
       process.exit(1);
     }
 
-    // 2. Create TokenStorage (default path: ~/.workbench/tokens.json)
+    // 3. Create TokenStorage (default path: ~/.workbench/tokens.json)
     const workbenchHome = process.env.WORKBENCH_HOME ?? path.join(homedir(), '.workbench');
     const tokenPath = path.join(workbenchHome, 'tokens.json');
     const tokenStorage = new TokenStorage(tokenPath);
@@ -144,8 +152,7 @@ export async function runCommand(prompt: string, options: RunCommandOptions): Pr
       apiUrl: process.env.ANTHROPIC_API_URL,
     });
 
-    // 5. Create ToolRegistry with default tools (wrapped with logging)
-    const baseRegistry = createDefaultTools();
+    // 5. Create LoggingToolRegistry wrapper (baseRegistry already created above)
     const toolRegistry = new LoggingToolRegistry(baseRegistry);
 
     // 6. Create SessionStorage
