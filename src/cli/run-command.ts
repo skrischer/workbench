@@ -8,10 +8,12 @@ import { TokenRefresher } from '../llm/token-refresh.js';
 import { TokenStorage } from '../llm/token-storage.js';
 import { CoreAgentLoop } from '../runtime/core-agent-loop.js';
 import { SessionStorage } from '../storage/session-storage.js';
+import { RunLogger } from '../storage/run-logger.js';
 import { createDefaultTools } from '../tools/defaults.js';
 import { ToolRegistry } from '../tools/registry.js';
 import { BaseTool } from '../tools/base.js';
-import type { AgentConfig, ToolResult } from '../types/index.js';
+import type { AgentConfig, ToolResult, Session, RunResult } from '../types/index.js';
+import type { AgentLoopHooks } from '../runtime/agent-loop.js';
 
 /**
  * CLI run command options
@@ -149,15 +151,60 @@ export async function runCommand(prompt: string, options: RunCommandOptions): Pr
     // 6. Create SessionStorage
     const sessionStorage = new SessionStorage();
 
-    // 7. Create CoreAgentLoop
+    // 7. Create RunLogger and define hooks
+    const runLogger = new RunLogger(workbenchHome);
+    let currentStepIndex = 0;
+    
+    const hooks: AgentLoopHooks = {
+      onBeforeRun: async (session: Session) => {
+        runLogger.startRun(session.id, prompt);
+      },
+      
+      onAfterStep: async (result: ToolResult, context: { runId: string; stepIndex: number; toolName: string }) => {
+        currentStepIndex = context.stepIndex;
+        
+        // Log the tool call
+        runLogger.logToolCall(
+          context.runId,
+          {
+            toolName: context.toolName,
+            input: {}, // Input was already logged by LoggingToolWrapper
+            output: result.output,
+            durationMs: 0, // Duration is tracked by event bus, not available here
+          },
+          context.stepIndex
+        );
+      },
+      
+      onAfterRun: async (result: RunResult, context: { runId: string }) => {
+        // Map RunResult status to RunLogStatus
+        // Note: RunResult.status is 'completed' | 'max_steps_reached' | 'failed'
+        // We map both 'completed' and 'max_steps_reached' to 'completed'
+        const status: 'completed' | 'failed' | 'cancelled' = 
+          result.status === 'failed' ? 'failed' : 'completed';
+        
+        // Convert LLMUsage to TokenUsage
+        const tokenUsage = {
+          inputTokens: result.tokenUsage.input_tokens,
+          outputTokens: result.tokenUsage.output_tokens,
+          totalTokens: result.tokenUsage.input_tokens + result.tokenUsage.output_tokens,
+        };
+        
+        await runLogger.endRun(context.runId, status, tokenUsage);
+      },
+    };
+
+    // 8. Create CoreAgentLoop with hooks
     const agentLoop = new CoreAgentLoop(
       anthropicClient,
       sessionStorage,
       toolRegistry,
-      agentConfig
+      agentConfig,
+      undefined, // eventBus
+      hooks
     );
 
-    // 8. Run agent loop
+    // 9. Run agent loop
     console.error(`🚀 Starting agent with prompt: "${prompt}"`);
     console.error(`📋 Model: ${agentConfig.model}`);
     console.error(`🔧 Max steps: ${agentConfig.maxSteps}`);
@@ -165,7 +212,7 @@ export async function runCommand(prompt: string, options: RunCommandOptions): Pr
 
     const result = await agentLoop.run(prompt);
 
-    // 9. Output results
+    // 10. Output results
     // Final response goes to stdout (for programmatic use)
     console.log(result.finalResponse);
 

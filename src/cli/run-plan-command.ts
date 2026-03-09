@@ -9,12 +9,15 @@ import { TokenRefresher } from '../llm/token-refresh.js';
 import { TokenStorage } from '../llm/token-storage.js';
 import { CoreAgentLoop } from '../runtime/core-agent-loop.js';
 import { SessionStorage } from '../storage/session-storage.js';
+import { RunLogger } from '../storage/run-logger.js';
 import { PlanExecutor } from '../task/plan-executor.js';
 import { PlanStorage } from '../task/plan-storage.js';
 import { createDefaultTools } from '../tools/defaults.js';
 import { ToolRegistry } from '../tools/registry.js';
 import type { EventMap } from '../types/events.js';
 import type { Step, StepResult } from '../types/task.js';
+import type { Session, RunResult, ToolResult } from '../types/index.js';
+import type { AgentLoopHooks } from '../runtime/agent-loop.js';
 import { DEFAULT_MODEL } from '../config/index.js';
 
 /**
@@ -61,6 +64,7 @@ export async function runPlanCommand(planId: string, options: RunPlanCommandOpti
     const sessionStorage = new SessionStorage();
     const planStorage = new PlanStorage();
     const eventBus = new TypedEventBus<EventMap>();
+    const runLogger = new RunLogger(workbenchHome);
 
     // 2. Load plan to show initial status
     const plan = await planStorage.load(planId);
@@ -96,7 +100,7 @@ export async function runPlanCommand(planId: string, options: RunPlanCommandOpti
       console.error('─────────────────────────────────────────');
     });
 
-    // 4. Create StepRunner that uses CoreAgentLoop
+    // 4. Create StepRunner that uses CoreAgentLoop with RunLogger hooks
     const stepRunner = async (step: Step): Promise<StepResult> => {
       const startTime = Date.now();
 
@@ -108,12 +112,52 @@ export async function runPlanCommand(planId: string, options: RunPlanCommandOpti
           systemPrompt: 'You are a helpful AI assistant executing a plan step.',
         };
 
-        // Create agent loop
+        // Define RunLogger hooks for this step
+        const hooks: AgentLoopHooks = {
+          onBeforeRun: async (session: Session) => {
+            runLogger.startRun(session.id, step.prompt);
+          },
+          
+          onAfterStep: async (result: ToolResult, context: { runId: string; stepIndex: number; toolName: string }) => {
+            // Log the tool call
+            runLogger.logToolCall(
+              context.runId,
+              {
+                toolName: context.toolName,
+                input: {},
+                output: result.output,
+                durationMs: 0,
+              },
+              context.stepIndex
+            );
+          },
+          
+          onAfterRun: async (result: RunResult, context: { runId: string }) => {
+            // Map RunResult status to RunLogStatus
+            // Note: RunResult.status is 'completed' | 'max_steps_reached' | 'failed'
+            // We map both 'completed' and 'max_steps_reached' to 'completed'
+            const status: 'completed' | 'failed' | 'cancelled' = 
+              result.status === 'failed' ? 'failed' : 'completed';
+            
+            // Convert LLMUsage to TokenUsage
+            const tokenUsage = {
+              inputTokens: result.tokenUsage.input_tokens,
+              outputTokens: result.tokenUsage.output_tokens,
+              totalTokens: result.tokenUsage.input_tokens + result.tokenUsage.output_tokens,
+            };
+            
+            await runLogger.endRun(context.runId, status, tokenUsage);
+          },
+        };
+
+        // Create agent loop with hooks
         const agentLoop = new CoreAgentLoop(
           anthropicClient,
           sessionStorage,
           toolRegistry,
-          agentConfig
+          agentConfig,
+          eventBus,
+          hooks
         );
 
         // Run the step
