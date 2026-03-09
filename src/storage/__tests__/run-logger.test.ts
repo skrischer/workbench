@@ -191,9 +191,11 @@ describe('RunLogger', () => {
     logger.startRun('list-run-3', 'Third run');
     await logger.endRun('list-run-3', 'completed');
 
-    const runs = await logger.listRuns();
+    const result = await logger.listRuns();
+    const runs = result.data;
 
     expect(runs).toHaveLength(3);
+    expect(result.total).toBe(3);
     expect(runs.map(r => r.id).sort()).toEqual(['list-run-1', 'list-run-2', 'list-run-3']);
     
     const run1 = runs.find(r => r.id === 'list-run-1');
@@ -209,8 +211,9 @@ describe('RunLogger', () => {
     expect(run2!.status).toBe('failed');
   });
 
-  it('should return empty array when no runs directory exists', async () => {
-    const runs = await logger.listRuns();
-    expect(runs).toEqual([]);
+  it('should return empty result when no runs directory exists', async () => {
+    const result = await logger.listRuns();
+    expect(result.data).toEqual([]);
+    expect(result.total).toBe(0);
   });
 });

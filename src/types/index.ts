@@ -250,3 +250,6 @@ export type {
 export { StorageError, NotFoundError, isNotFoundError, createNotFoundError } from './errors.js';
 // Tool Context Types
 export type { ToolContext } from './tool-context.js';
+// Storage Pagination Types
+export type { StorageListOptions, StorageListResult } from './storage.js';
+export { normalizeListOptions } from './storage.js';

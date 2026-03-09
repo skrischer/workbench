@@ -18,11 +18,30 @@ export interface SessionsRouteOptions {
 export const sessionsRoutes: FastifyPluginAsync<SessionsRouteOptions> = async (fastify, opts) => {
   const { sessionStorage } = opts;
 
-  // GET /api/sessions — List all sessions
-  fastify.get('/api/sessions', async (_request, reply) => {
+  // GET /api/sessions — List all sessions with pagination
+  fastify.get<{
+    Querystring: {
+      limit?: string;
+      offset?: string;
+      sort?: 'asc' | 'desc';
+    };
+  }>('/api/sessions', async (request, reply) => {
     try {
-      const sessions = await sessionStorage.list();
-      return reply.send(sessions);
+      // Parse query parameters
+      const limit = request.query.limit ? parseInt(request.query.limit, 10) : undefined;
+      const offset = request.query.offset ? parseInt(request.query.offset, 10) : undefined;
+      const sort = request.query.sort;
+
+      // Validate numeric parameters
+      if (limit !== undefined && (isNaN(limit) || limit < 1)) {
+        return reply.status(400).send({ error: 'Invalid limit parameter' });
+      }
+      if (offset !== undefined && (isNaN(offset) || offset < 0)) {
+        return reply.status(400).send({ error: 'Invalid offset parameter' });
+      }
+
+      const result = await sessionStorage.list({ limit, offset, sort });
+      return reply.send(result);
     } catch (error) {
       fastify.log.error(error, 'Failed to list sessions');
       return reply.status(500).send({ error: 'Failed to list sessions' });
