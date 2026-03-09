@@ -87,13 +87,13 @@ export const metricsRoutes: FastifyPluginAsync<MetricsRouteOptions> = async (fas
         cancelled: 0,
       };
 
-      for (const run of runs) {
+      for (const run of runs.data) {
         runsByStatus[run.status] = (runsByStatus[run.status] || 0) + 1;
       }
 
       // Calculate total tokens
       let totalTokens = 0;
-      for (const run of runs) {
+      for (const run of runs.data) {
         if (run.tokenUsage) {
           totalTokens += run.tokenUsage.totalTokens;
         }
@@ -110,7 +110,7 @@ export const metricsRoutes: FastifyPluginAsync<MetricsRouteOptions> = async (fas
       // Generate Prometheus text format
       const metricsText = formatPrometheusMetrics({
         runsByStatus,
-        totalSessions: sessions.length,
+        totalSessions: sessions.total,
         totalTokens,
         activeWsConnections,
         uptimeSeconds,
