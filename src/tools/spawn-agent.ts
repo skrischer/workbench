@@ -1,7 +1,7 @@
 // src/tools/spawn-agent.ts — Spawn Agent Tool
 
 import { BaseTool } from './base.js';
-import type { ToolResult } from '../types/index.js';
+import type { ToolResult, ToolContext } from '../types/index.js';
 import type { AgentRegistry } from '../multi-agent/agent-registry.js';
 import type { SpawnConfig } from '../types/agent.js';
 import { validateSpawnConfig } from '../multi-agent/validation.js';
@@ -61,7 +61,7 @@ export class SpawnAgentTool extends BaseTool {
     this.registry = registry;
   }
 
-  async execute(input: Record<string, unknown>): Promise<ToolResult> {
+  async execute(input: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     try {
       // Build config from input
       const config: SpawnConfig = {

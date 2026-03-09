@@ -13,12 +13,14 @@ import type {
   UserMessage,
   AssistantMessage,
   ToolResultMessage,
+  ToolContext,
 } from '../types/index.js';
 import type { AnthropicClient } from '../llm/anthropic-client.js';
 import type { SessionStorage } from '../storage/session-storage.js';
 import type { ToolRegistry } from '../tools/registry.js';
 import type { TypedEventBus } from '../events/event-bus.js';
 import { validateToolInput } from '../tools/validator.js';
+import { PermissionGuard, PermissionError } from '../tools/permissions.js';
 
 /**
  * AgentLoop — Core agent runtime loop
@@ -30,13 +32,21 @@ import { validateToolInput } from '../tools/validator.js';
  * 4. Repeats until completion or max steps
  */
 export class CoreAgentLoop {
+  private activeControllers: Map<string, AbortController> = new Map();
+  private permissionGuard?: PermissionGuard;
+
   constructor(
     private anthropicClient: AnthropicClient,
     private sessionStorage: SessionStorage,
     private toolRegistry: ToolRegistry,
     private config: AgentConfig,
     private eventBus?: TypedEventBus
-  ) {}
+  ) {
+    // Initialize permission guard if allowedPaths are configured
+    if (config.allowedPaths && config.allowedPaths.length > 0) {
+      this.permissionGuard = new PermissionGuard(config.allowedPaths);
+    }
+  }
 
   /**
    * Run the agent with a user prompt
@@ -47,6 +57,10 @@ export class CoreAgentLoop {
     // 1. Create session
     const session = await this.sessionStorage.create('agent-runtime');
     const runId = session.id;
+    
+    // Create AbortController for this run
+    const abortController = new AbortController();
+    this.activeControllers.set(runId, abortController);
     
     // Emit run:start event
     this.eventBus?.emit('run:start', {
@@ -153,7 +167,7 @@ export class CoreAgentLoop {
 
             // Execute tool and measure duration
             const startTime = performance.now();
-            const toolResult = await this.executeTool(toolUse);
+            const toolResult = await this.executeTool(toolUse, runId);
             const durationMs = performance.now() - startTime;
 
             // Emit tool:result event
@@ -243,7 +257,33 @@ export class CoreAgentLoop {
         tokenUsage: totalUsage,
         status,
       };
+    } finally {
+      // Clean up AbortController
+      this.activeControllers.delete(runId);
     }
+  }
+
+  /**
+   * Cancel a running agent execution
+   * @param runId - The run ID to cancel
+   * @returns true if the run was found and cancelled, false otherwise
+   */
+  cancel(runId: string): boolean {
+    const controller = this.activeControllers.get(runId);
+    if (controller) {
+      controller.abort();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Check if a run is currently active
+   * @param runId - The run ID to check
+   * @returns true if the run is active, false otherwise
+   */
+  isRunActive(runId: string): boolean {
+    return this.activeControllers.has(runId);
   }
 
   /**
@@ -328,7 +368,7 @@ export class CoreAgentLoop {
   /**
    * Execute a tool and return the result as ToolResultBlock
    */
-  private async executeTool(toolUse: ToolUseBlock): Promise<ToolResultBlock> {
+  private async executeTool(toolUse: ToolUseBlock, runId: string): Promise<ToolResultBlock> {
     try {
       const tool = this.toolRegistry.get(toolUse.name);
       
@@ -352,7 +392,40 @@ export class CoreAgentLoop {
         };
       }
 
-      const result = await tool.execute(toolUse.input);
+      // PERMISSION CHECK MIDDLEWARE — Check path permissions before execution
+      if (this.permissionGuard && this.isWritingTool(toolUse.name)) {
+        const targetPath = this.extractTargetPath(toolUse.name, toolUse.input);
+        
+        if (targetPath) {
+          try {
+            this.permissionGuard.checkPath(targetPath);
+          } catch (error) {
+            if (error instanceof PermissionError) {
+              return {
+                type: 'tool_result',
+                tool_use_id: toolUse.id,
+                content: `Permission denied: ${error.message}`,
+                is_error: true,
+              };
+            }
+            throw error; // Re-throw if it's not a PermissionError
+          }
+        }
+      }
+
+      // Build ToolContext with AbortSignal and PermissionGuard
+      const abortController = this.activeControllers.get(runId);
+      const context: ToolContext = {
+        signal: abortController?.signal,
+        permissions: this.permissionGuard,
+        eventBus: this.eventBus,
+        metadata: {
+          runId,
+          toolCallId: toolUse.id,
+        },
+      };
+
+      const result = await tool.execute(toolUse.input, context);
 
       return {
         type: 'tool_result',
@@ -380,5 +453,33 @@ export class CoreAgentLoop {
       .map(block => block.text);
     
     return textBlocks.join('\n');
+  }
+
+  /**
+   * Check if a tool is a writing tool that needs permission checks
+   */
+  private isWritingTool(toolName: string): boolean {
+    // Known writing tools by name
+    const writingTools = [
+      'write_file',
+      'edit_file',
+      'apply_patch',
+      'exec', // exec can modify files via cwd
+    ];
+    
+    return writingTools.includes(toolName);
+  }
+
+  /**
+   * Extract target path from tool input for permission checking
+   */
+  private extractTargetPath(toolName: string, input: Record<string, unknown>): string | null {
+    // Different tools have different path parameters
+    if (toolName === 'exec') {
+      return (input.cwd as string) || null;
+    }
+    
+    // Most file tools use 'path' parameter
+    return (input.path as string) || null;
   }
 }

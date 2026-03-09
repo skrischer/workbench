@@ -2,7 +2,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { BaseTool } from './base.js';
-import type { ToolResult } from '../types/index.js';
+import type { ToolResult, ToolContext } from '../types/index.js';
 
 /**
  * Tool for reading file contents with optional offset/limit support.
@@ -29,7 +29,7 @@ export class ReadFileTool extends BaseTool {
     required: ['path'],
   };
 
-  async execute(input: Record<string, unknown>): Promise<ToolResult> {
+  async execute(input: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     const path = input.path as string;
     const offset = input.offset as number | undefined;
     const limit = input.limit as number | undefined;

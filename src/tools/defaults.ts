@@ -68,5 +68,12 @@ export function createDefaultTools(options?: DefaultToolsOptions): ToolRegistry 
     registry.register(new SendMessageTool(options.messageBus));
   }
   
+  // Register default aliases for common tool names
+  // LLMs often generate shorter names like 'read' instead of 'read_file'
+  registry.registerAlias('read', 'read_file');
+  registry.registerAlias('write', 'write_file');
+  registry.registerAlias('edit', 'edit_file');
+  registry.registerAlias('run', 'exec');
+  
   return registry;
 }

@@ -1,6 +1,6 @@
 // src/tools/base.ts — Abstract Base Tool Class
 
-import type { ToolResult } from '../types/index.js';
+import type { ToolResult, ToolContext } from '../types/index.js';
 
 /**
  * Abstract base class that enforces the Tool interface.
@@ -19,7 +19,8 @@ export abstract class BaseTool {
   /**
    * Execute the tool with the given input.
    * @param input - Input parameters matching the inputSchema
+   * @param context - Optional context with cross-cutting concerns (signal, permissions, eventBus)
    * @returns Promise resolving to a ToolResult
    */
-  abstract execute(input: Record<string, unknown>): Promise<ToolResult>;
+  abstract execute(input: Record<string, unknown>, context?: ToolContext): Promise<ToolResult>;
 }

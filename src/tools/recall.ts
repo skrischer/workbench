@@ -1,7 +1,7 @@
 // src/tools/recall.ts — Recall Tool for Memory Search
 
 import { BaseTool } from './base.js';
-import type { ToolResult } from '../types/index.js';
+import type { ToolResult, ToolContext } from '../types/index.js';
 import type { LanceDBMemoryStore } from '../memory/lancedb-store.js';
 import type { MemoryType } from '../types/memory.js';
 
@@ -45,7 +45,7 @@ export class RecallTool extends BaseTool {
     this.memoryStore = memoryStore;
   }
 
-  async execute(input: Record<string, unknown>): Promise<ToolResult> {
+  async execute(input: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     const query = input.query as string;
     const type = input.type as MemoryType | undefined;
     const limit = (input.limit as number | undefined) ?? 5;

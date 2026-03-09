@@ -60,6 +60,9 @@ export interface SpawnConfig {
 
   /** Optional: Working directory for agent */
   cwd?: string;
+
+  /** Optional: Path allowlist with glob patterns for file access control */
+  allowedPaths?: string[];
 }
 
 /** Message passed between agents */

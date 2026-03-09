@@ -3,7 +3,7 @@
 import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { BaseTool } from './base.js';
-import type { ToolResult } from '../types/index.js';
+import type { ToolResult, ToolContext } from '../types/index.js';
 
 /**
  * Tool for writing content to a file with automatic parent directory creation.
@@ -26,7 +26,7 @@ export class WriteFileTool extends BaseTool {
     required: ['path', 'content'],
   };
 
-  async execute(input: Record<string, unknown>): Promise<ToolResult> {
+  async execute(input: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     const path = input.path as string;
     const content = input.content as string;
 

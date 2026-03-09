@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { BaseTool } from './base.js';
 import { walkDirectory, shouldIgnore } from './utils/ignore.js';
-import type { ToolResult } from '../types/index.js';
+import type { ToolResult, ToolContext } from '../types/index.js';
 
 /**
  * Result of a single grep match.
@@ -53,7 +53,7 @@ export class GrepTool extends BaseTool {
     required: ['pattern'],
   };
 
-  async execute(input: Record<string, unknown>): Promise<ToolResult> {
+  async execute(input: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     const pattern = input.pattern as string;
     const path = (input.path as string | undefined) || '.';
     const include = input.include as string | undefined;
