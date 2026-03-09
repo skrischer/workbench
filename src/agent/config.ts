@@ -3,12 +3,13 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { AgentConfig } from '../types/index.js';
+import { DEFAULT_MODEL } from '../config/index.js';
 
 /**
  * Default agent configuration with sensible defaults
  */
 export const defaultAgentConfig: AgentConfig = {
-  model: 'claude-sonnet-4-20250514',
+  model: DEFAULT_MODEL,
   systemPrompt: 'You are a helpful coding assistant with access to tools.',
   maxSteps: 25,
   tools: [],

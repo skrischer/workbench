@@ -1,5 +1,6 @@
 import type { LLMMessage, LLMToolDef, LLMConfig, LLMResponse } from '../types/index.js';
 import { TokenRefresher } from './token-refresh.js';
+import { DEFAULT_MODEL, ANTHROPIC_API_URL } from '../config/index.js';
 
 /**
  * AnthropicClient — Messages API client with OAuth Bearer token authentication
@@ -13,9 +14,9 @@ export class AnthropicClient {
   constructor(tokenRefresher: TokenRefresher, config?: Partial<LLMConfig>) {
     this.tokenRefresher = tokenRefresher;
     this.config = {
-      model: config?.model ?? 'claude-sonnet-4-20250514',
+      model: config?.model ?? DEFAULT_MODEL,
       maxTokens: config?.maxTokens ?? 8192,
-      apiUrl: config?.apiUrl ?? 'https://api.anthropic.com/v1/messages'
+      apiUrl: config?.apiUrl ?? ANTHROPIC_API_URL
     };
   }
 
