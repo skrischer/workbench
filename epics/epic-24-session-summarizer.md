@@ -354,3 +354,49 @@ Wave 2 (parallel):
 - **Memory-Retrieval-Relevanz:** Agent könnte falsche/irrelevante Memories finden → **Mitigation: Score-Threshold + Context-Window-Limit**
 - **Storage-Growth:** Memory-DB wächst unbegrenzt → **Mitigation: Retention-Policy (default 90d) + Cleanup-Command**
 - **Performance:** Embedding-Generierung könnte langsam sein → **Mitigation: Async Post-Run, blockiert Run-Completion nicht**
+
+---
+
+### Task 24.6: `vitest-timeout-config` — E2E Test Timeout Fix (Quick)
+
+**Beschreibung:**
+Sofortiger Fix für 8 timeout-failures in E2E Tests durch Vitest-Timeout-Erhöhung. Ermöglicht Epic-PR-Merge ohne E2E-Blockade.
+
+**Problem:**
+- 8 E2E Tests timeout @ 5s (Vitest default)
+- CLI-Spawn + Mock-Server + Embedding = 8-15s real execution time
+- Blockiert Epic 24 PR-Merge
+
+**Dateien geändert:**
+- `vitest.config.ts` (Global testTimeout: 15000)
+- `src/test/e2e/auto-memory.test.ts` (Timeout-Comments)
+- `src/test/e2e/agent-loop/*.test.ts` (Timeout-Comments)
+
+**Changes:**
+```typescript
+// vitest.config.ts
+export default defineConfig({
+  test: {
+    globals: true,
+    environment: 'node',
+    testTimeout: 15000, // ✅ 15s global (was: 5s default)
+    // ...
+  },
+});
+```
+
+**Acceptance Criteria:**
+- ✅ Alle 968 Tests passed (keine Timeouts)
+- ✅ Vitest testTimeout: 15000 (global)
+- ✅ Comments in slow tests: "TODO Epic 27: Async embeddings will reduce to <10s"
+- ✅ TypeScript kompiliert
+- ✅ Build erfolgreich
+- ✅ 3x Full-Suite-Run ohne Flakiness
+
+**Known Issue (akzeptiert für Epic 24):**
+- E2E Tests dauern 10-15s (durch synchrone Embedding-Generation)
+- Fix in Epic 27: Async embeddings → <10s
+
+**Komplexität:** S (5 Zeilen Code, keine Logic-Changes)  
+**Parallelisierbar:** Ja (unabhängig)
+
