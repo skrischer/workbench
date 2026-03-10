@@ -41,9 +41,9 @@ export async function createDashboard(config: DashboardConfig = {}): Promise<Das
   // 2. Create EventBus
   const eventBus = new TypedEventBus<EventMap>();
 
-  // 3. Create Storage instances
+  // 3. Create Storage instances (SessionStorage needs EventBus for WebSocket events)
   const runLogger = new RunLogger();
-  const sessionStorage = new SessionStorage();
+  const sessionStorage = new SessionStorage(undefined, eventBus);
   const planStorage = new PlanStorage();
 
   // 4. Register API routes
