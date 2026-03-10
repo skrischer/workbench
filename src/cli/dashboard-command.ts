@@ -3,12 +3,20 @@
 import { Command } from 'commander';
 import { createDashboard } from '../dashboard/create-dashboard.js';
 import type { DashboardConfig } from '../dashboard/config.js';
+import { execSync } from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Dashboard command options
  */
 interface DashboardCommandOptions {
   port?: number;
+  build?: boolean;
 }
 
 /**
@@ -17,9 +25,12 @@ interface DashboardCommandOptions {
  * Usage:
  *   workbench dashboard              # Start on default port 3000
  *   workbench dashboard --port 8080  # Start on custom port
+ *   workbench dashboard --build      # Auto-build UI if missing
  * 
  * Features:
  * - Start Fastify server with all routes and WebSocket
+ * - Check for UI build and warn if missing
+ * - Optional auto-build with --build flag
  * - Graceful shutdown on CTRL+C
  * - Clear error messages for port conflicts
  * 
@@ -31,12 +42,27 @@ export function createDashboardCommand(): Command {
   command
     .description('Start the Workbench dashboard server')
     .option('-p, --port <number>', 'Server port', parseInt)
+    .option('-b, --build', 'Automatically build UI if not present')
     .action(async (options: DashboardCommandOptions) => {
       try {
         // Build config from CLI options
         const config: DashboardConfig = {};
         if (options.port !== undefined) {
           config.port = options.port;
+        }
+
+        // Check if UI is built
+        const uiDistPath = path.join(__dirname, '..', 'dashboard', 'ui', 'dist');
+
+        if (!fs.existsSync(uiDistPath)) {
+          console.warn('⚠️  Dashboard UI not built. Run: cd src/dashboard/ui && npm run build');
+          
+          if (options.build) {
+            console.log('🔨 Building UI...');
+            execSync('cd src/dashboard/ui && npm run build', { stdio: 'inherit' });
+          } else {
+            console.log('ℹ️  Dashboard API will run, but UI won\'t be available.');
+          }
         }
 
         // Create and start dashboard
