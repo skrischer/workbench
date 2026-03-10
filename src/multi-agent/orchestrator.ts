@@ -4,6 +4,10 @@ import type { AgentRegistry } from './agent-registry.js';
 import type { MessageBus } from './message-bus.js';
 import type { Plan, Step, StepResult, PlanStatus } from '../types/task.js';
 import type { AgentInstance } from '../types/agent.js';
+import type { AnthropicClient } from '../llm/anthropic-client.js';
+import type { SessionStorage } from '../storage/session-storage.js';
+import type { ToolRegistry } from '../tools/registry.js';
+import { AgentLoop } from '../runtime/agent-loop.js';
 
 export interface OrchestratorOptions {
   /** Maximum number of concurrent worker agents (default: 5) */
@@ -33,17 +37,108 @@ export interface PlanExecutionResult {
  * - Assigns steps via MessageBus
  * - Collects results and updates plan status
  * - Handles failures and worker cleanup
+ * - Runs spawned agents in their own AgentLoop
  */
 export class AgentOrchestrator {
   private registry: AgentRegistry;
   private messageBus: MessageBus;
+  private anthropicClient: AnthropicClient;
+  private sessionStorage: SessionStorage;
+  private toolRegistry: ToolRegistry;
   private workers: Set<string> = new Set();
   private stepResults: Map<string, StepResult> = new Map();
   private stepErrors: Array<{ stepId: string; error: string }> = [];
 
-  constructor(registry: AgentRegistry, messageBus: MessageBus) {
+  constructor(
+    registry: AgentRegistry,
+    messageBus: MessageBus,
+    anthropicClient: AnthropicClient,
+    sessionStorage: SessionStorage,
+    toolRegistry: ToolRegistry
+  ) {
     this.registry = registry;
     this.messageBus = messageBus;
+    this.anthropicClient = anthropicClient;
+    this.sessionStorage = sessionStorage;
+    this.toolRegistry = toolRegistry;
+  }
+
+  /**
+   * Run a spawned agent in its own AgentLoop.
+   * This is called automatically after spawn_agent tool execution.
+   * @param agentId - ID of the agent to run
+   * @returns Promise that resolves when agent completes
+   */
+  async runAgent(agentId: string): Promise<void> {
+    // 1. Get agent from registry
+    const agent = this.registry.get(agentId);
+    if (!agent) {
+      throw new Error(`Agent not found: ${agentId}`);
+    }
+
+    try {
+      // 2. Set status to running
+      this.registry.onStatusChange(agentId, 'running');
+
+      // 3. Wait for task assignment via MessageBus
+      // In a real implementation, this would wait for a 'task' message
+      // For now, we'll use a simple default prompt
+      const prompt = await this.waitForTaskAssignment(agentId);
+
+      // 4. Create AgentLoop for this agent (with recursive orchestrator reference)
+      const agentLoop = new AgentLoop(
+        this.anthropicClient,
+        this.sessionStorage,
+        this.toolRegistry,
+        agent.config,
+        undefined, // eventBus
+        undefined, // hooks
+        agent.id // agentId
+      );
+
+      // 5. Run the agent
+      const result = await agentLoop.run(prompt);
+
+      // 6. Update status based on result
+      const status = result.status === 'failed' ? 'failed' : 'completed';
+      this.registry.onStatusChange(agentId, status);
+
+      // 7. Send completion message to parent (if exists)
+      if (agent.parentId) {
+        this.messageBus.send(agentId, agent.parentId, 'result', {
+          agentId,
+          status,
+          result: result.finalResponse,
+          tokenUsage: result.tokenUsage,
+          steps: result.steps,
+        });
+      }
+    } catch (error) {
+      // Mark as failed and send error to parent
+      this.registry.onStatusChange(agentId, 'failed');
+
+      if (agent.parentId) {
+        this.messageBus.send(agentId, agent.parentId, 'error', {
+          agentId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      // Re-throw for logging
+      throw error;
+    }
+  }
+
+  /**
+   * Wait for a task assignment message from parent or return a default prompt.
+   * @param agentId - Agent ID waiting for task
+   * @returns Task prompt
+   */
+  private async waitForTaskAssignment(agentId: string): Promise<string> {
+    // For MVP, we'll use a simple default prompt
+    // In a full implementation, this would listen to MessageBus for 'task' messages
+    const agent = this.registry.get(agentId);
+    return agent?.config.systemPrompt || 'You are a worker agent. Await instructions.';
   }
 
   /**

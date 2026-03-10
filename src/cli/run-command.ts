@@ -19,6 +19,7 @@ import { LanceDBMemoryStore } from '../memory/lancedb-store.js';
 import { createAutoMemoryHook } from '../memory/auto-memory.js';
 import { AgentRegistry } from '../multi-agent/agent-registry.js';
 import { MessageBus } from '../multi-agent/message-bus.js';
+import { AgentOrchestrator } from '../multi-agent/orchestrator.js';
 
 /**
  * CLI run command options
@@ -186,6 +187,15 @@ export async function runCommand(prompt: string, options: RunCommandOptions): Pr
     baseRegistry.register(new RememberTool(memoryStore));
     baseRegistry.register(new RecallTool(memoryStore));
 
+    // 6.8. Create AgentOrchestrator
+    const orchestrator = new AgentOrchestrator(
+      agentRegistry,
+      messageBus,
+      anthropicClient,
+      sessionStorage,
+      baseRegistry // Pass base registry (not the logging wrapper)
+    );
+
     // 7. Create RunLogger and define hooks
     const runLogger = new RunLogger(workbenchHome);
     let currentStepIndex = 0;
@@ -240,14 +250,17 @@ export async function runCommand(prompt: string, options: RunCommandOptions): Pr
       },
     };
 
-    // 8. Create CoreAgentLoop with hooks
+    // 8. Create CoreAgentLoop with hooks and orchestrator
     const agentLoop = new CoreAgentLoop(
       anthropicClient,
       sessionStorage,
       toolRegistry,
       agentConfig,
       undefined, // eventBus
-      hooks
+      hooks,
+      undefined, // agentId (auto-generated)
+      agentRegistry,
+      orchestrator
     );
 
     // 9. Run agent loop

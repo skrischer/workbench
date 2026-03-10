@@ -6,16 +6,34 @@ import { MessageBus } from '../message-bus.js';
 import { AgentOrchestrator } from '../orchestrator.js';
 import type { Plan, Step, StepResult } from '../../types/task.js';
 import type { AgentMessage } from '../../types/agent.js';
+import type { AnthropicClient } from '../../llm/anthropic-client.js';
+import type { SessionStorage } from '../../storage/session-storage.js';
+import type { ToolRegistry } from '../../tools/registry.js';
 
 describe('AgentOrchestrator', () => {
   let registry: AgentRegistry;
   let messageBus: MessageBus;
   let orchestrator: AgentOrchestrator;
+  let mockClient: AnthropicClient;
+  let mockStorage: SessionStorage;
+  let mockTools: ToolRegistry;
 
   beforeEach(() => {
     registry = new AgentRegistry(10);
     messageBus = new MessageBus();
-    orchestrator = new AgentOrchestrator(registry, messageBus);
+    
+    // Create minimal mocks for required dependencies
+    mockClient = {} as AnthropicClient;
+    mockStorage = {} as SessionStorage;
+    mockTools = {} as ToolRegistry;
+    
+    orchestrator = new AgentOrchestrator(
+      registry,
+      messageBus,
+      mockClient,
+      mockStorage,
+      mockTools
+    );
   });
 
   afterEach(() => {

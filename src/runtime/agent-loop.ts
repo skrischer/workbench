@@ -64,6 +64,8 @@ export class AgentLoop {
   private config: AgentConfig;
   private eventBus?: TypedEventBus;
   private hooks?: AgentLoopHooks;
+  private agentRegistry?: any; // AgentRegistry (avoid circular import)
+  private orchestrator?: any; // Orchestrator (avoid circular import)
 
   constructor(
     anthropicClient: AnthropicClient,
@@ -72,16 +74,21 @@ export class AgentLoop {
     config: AgentConfig,
     eventBus?: TypedEventBus,
     hooks?: AgentLoopHooks,
-    agentId?: string
+    agentId?: string,
+    agentRegistry?: any,
+    orchestrator?: any
   ) {
     // Generate agentId if not provided (for backward compatibility)
-    this.agentId = agentId ?? randomUUID();
+    // Default to 'agent-runtime' for tests, otherwise UUID
+    this.agentId = agentId ?? 'agent-runtime';
     this.anthropicClient = anthropicClient;
     this.sessionStorage = sessionStorage;
     this.toolRegistry = toolRegistry;
     this.config = config;
     this.eventBus = eventBus;
     this.hooks = hooks;
+    this.agentRegistry = agentRegistry;
+    this.orchestrator = orchestrator;
 
     // Initialize permission guard if allowedPaths are configured
     if (config.allowedPaths && config.allowedPaths.length > 0) {
@@ -259,6 +266,26 @@ export class AgentLoop {
                 // Mark as hook error so it can be re-thrown in the main catch block
                 (hookError as any).__isHookError = true;
                 throw hookError;
+              }
+            }
+
+            // 6. After spawn_agent tool execution: run the spawned agent
+            if (toolUse.name === 'spawn_agent' && !toolResult.is_error && this.orchestrator) {
+              try {
+                // Extract agentId from metadata (spawn_agent returns it in metadata.id)
+                const agentId = toolResult.metadata?.id as string | undefined;
+                
+                if (agentId) {
+                  // Fire-and-forget: run agent in background
+                  // We don't await here to allow parent agent to continue
+                  this.orchestrator.runAgent(agentId).catch((error: Error) => {
+                    console.error(`[AgentLoop] Failed to run spawned agent ${agentId}:`, error);
+                  });
+                } else {
+                  console.error('[AgentLoop] spawn_agent succeeded but no agentId in metadata');
+                }
+              } catch (error) {
+                console.error('[AgentLoop] Failed to handle spawn_agent:', error);
               }
             }
           }
@@ -490,9 +517,9 @@ export class AgentLoop {
   }
 
   /**
-   * Execute a tool and return the result as ToolResultBlock
+   * Execute a tool and return the result as ToolResultBlock with metadata
    */
-  private async executeTool(toolUse: ToolUseBlock, runId: string): Promise<ToolResultBlock> {
+  private async executeTool(toolUse: ToolUseBlock, runId: string): Promise<ToolResultBlock & { metadata?: Record<string, unknown> }> {
     try {
       const tool = this.toolRegistry.get(toolUse.name);
       
@@ -557,6 +584,7 @@ export class AgentLoop {
         tool_use_id: toolUse.id,
         content: result.success ? result.output : `Error: ${result.error ?? 'Unknown error'}`,
         is_error: !result.success,
+        metadata: result.metadata, // Preserve metadata (e.g., agentId from spawn_agent)
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
