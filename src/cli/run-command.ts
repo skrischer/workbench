@@ -14,6 +14,9 @@ import { ToolRegistry } from '../tools/registry.js';
 import { BaseTool } from '../tools/base.js';
 import type { AgentConfig, ToolResult, Session, RunResult } from '../types/index.js';
 import type { AgentLoopHooks } from '../runtime/agent-loop.js';
+import { loadUserConfig } from '../config/user-config.js';
+import { LanceDBMemoryStore } from '../memory/lancedb-store.js';
+import { createAutoMemoryHook } from '../memory/auto-memory.js';
 
 /**
  * CLI run command options
@@ -22,6 +25,7 @@ export interface RunCommandOptions {
   model?: string;
   maxSteps?: number;
   config?: string;
+  noSummarize?: boolean;
 }
 
 /**
@@ -158,10 +162,27 @@ export async function runCommand(prompt: string, options: RunCommandOptions): Pr
     // 6. Create SessionStorage
     const sessionStorage = new SessionStorage();
 
+    // 6.5. Load UserConfig for auto-summarization
+    const userConfig = await loadUserConfig();
+
+    // 6.6. Create LanceDBMemoryStore for auto-memory
+    const memoryStore = new LanceDBMemoryStore({
+      dbPath: path.join(workbenchHome, 'memory'),
+    });
+
     // 7. Create RunLogger and define hooks
     const runLogger = new RunLogger(workbenchHome);
     let currentStepIndex = 0;
     
+    // Create auto-memory hook
+    const autoMemoryHook = createAutoMemoryHook({
+      sessionStorage,
+      runLogger,
+      memoryStore,
+      userConfig,
+      noSummarize: options.noSummarize,
+    });
+
     const hooks: AgentLoopHooks = {
       onBeforeRun: async (session: Session) => {
         runLogger.startRun(session.id, prompt);
@@ -184,13 +205,10 @@ export async function runCommand(prompt: string, options: RunCommandOptions): Pr
       },
       
       onAfterRun: async (result: RunResult, context: { runId: string }) => {
-        // Map RunResult status to RunLogStatus
-        // Note: RunResult.status is 'completed' | 'max_steps_reached' | 'failed'
-        // We map both 'completed' and 'max_steps_reached' to 'completed'
+        // 1. Complete run logging
         const status: 'completed' | 'failed' | 'cancelled' = 
           result.status === 'failed' ? 'failed' : 'completed';
         
-        // Convert LLMUsage to TokenUsage
         const tokenUsage = {
           inputTokens: result.tokenUsage.input_tokens,
           outputTokens: result.tokenUsage.output_tokens,
@@ -198,6 +216,11 @@ export async function runCommand(prompt: string, options: RunCommandOptions): Pr
         };
         
         await runLogger.endRun(context.runId, status, tokenUsage);
+        
+        // 2. Auto-memory storage (if enabled)
+        if (autoMemoryHook) {
+          await autoMemoryHook(result, context);
+        }
       },
     };
 

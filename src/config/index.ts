@@ -11,3 +11,10 @@ export {
 } from './models.js';
 
 export { resolveModelName } from './model-resolver.js';
+
+export {
+  loadUserConfig,
+  saveUserConfig,
+  DEFAULT_USER_CONFIG,
+} from './user-config.js';
+export type { UserConfig } from './user-config.js';

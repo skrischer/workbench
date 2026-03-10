@@ -34,6 +34,7 @@ describe('E2E Agent Loop - Single Tool Use', () => {
       await testEnv?.cleanup();
     });
 
+    // TODO Epic 27: Test duration 8-10s (CLI spawn + mock server + tool execution).
     it('should complete tool_use → tool_result → final text cycle', async () => {
       const result = await runCli({
         args: ['run', 'read the test file'],

@@ -223,6 +223,32 @@ export interface RunResult {
   status: 'completed' | 'max_steps_reached' | 'failed';
 }
 
+/** Input for session summarization */
+export interface SessionSummaryInput {
+  sessionId: string;
+  runId: string;
+  messages: Message[];
+  runMetadata: import('./run.js').RunMetadata;
+  filesModified: string[];
+}
+
+/** Structured session summary output */
+export interface SessionSummary {
+  sessionId: string;
+  runId: string;
+  summary: string;
+  keyDecisions: string[];
+  errors: string[];
+  learnings: string[];
+  relatedFiles: string[];
+  metadata: {
+    tokenUsage: import('./events.js').TokenUsage;
+    status: RunStatus;
+    duration: number;
+    timestamp: string;
+  };
+}
+
 // Re-export event types
 export type { EventMap, EventListener, Unsubscribe, TokenUsage, StepTokenUsage } from './events.js';
 // Memory System Types
@@ -255,3 +281,6 @@ export type { ToolContext } from './tool-context.js';
 // Storage Pagination Types
 export type { StorageListOptions, StorageListResult } from './storage.js';
 export { normalizeListOptions } from './storage.js';
+// User Configuration Types
+export type { UserConfig } from '../config/user-config.js';
+export { DEFAULT_USER_CONFIG, loadUserConfig, saveUserConfig, getConfigValue, setConfigValue } from '../config/user-config.js';

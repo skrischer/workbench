@@ -82,6 +82,7 @@ describe('E2E Agent Loop - Multi-Step Tool Chain', () => {
       await testEnv?.cleanup();
     });
 
+    // TODO Epic 27: Test duration 8-10s (CLI spawn + mock server + tool execution).
     it('should complete multi-step tool chain: read → write → done', async () => {
       const result = await runCli({
         args: ['run', 'read input.txt and write to output.txt'],
