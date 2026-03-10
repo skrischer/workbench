@@ -28,11 +28,12 @@ describe('E2E Auto-Memory Storage', () => {
       });
 
       // Enable auto-summarization in user config
-      const userConfigPath = path.join(testEnv.workbenchHome, 'user-config.json');
+      // Set WORKBENCH_HOME to testEnv directory
+      process.env.WORKBENCH_HOME = testEnv.workbenchHome;
       await saveUserConfig({
         autoSummarize: true,
         minMessagesForSummary: 2, // Lower threshold for testing
-      }, userConfigPath);
+      });
     });
 
     afterAll(async () => {
@@ -110,10 +111,11 @@ describe('E2E Auto-Memory Storage', () => {
       });
 
       // Disable auto-summarization
-      const userConfigPath = path.join(testEnv.workbenchHome, 'user-config.json');
+      // Set WORKBENCH_HOME to testEnv directory
+      process.env.WORKBENCH_HOME = testEnv.workbenchHome;
       await saveUserConfig({
         autoSummarize: false,
-      }, userConfigPath);
+      });
     });
 
     afterAll(async () => {
@@ -163,22 +165,24 @@ describe('E2E Auto-Memory Storage', () => {
     });
 
     it('should load user config with defaults', async () => {
-      const userConfigPath = path.join(testEnv.workbenchHome, 'user-config.json');
-      const config = await loadUserConfig(userConfigPath);
+      // Set WORKBENCH_HOME to testEnv directory
+      process.env.WORKBENCH_HOME = testEnv.workbenchHome;
+      const config = await loadUserConfig();
 
       expect(config.autoSummarize).toBe(true); // Default value
       expect(config.minMessagesForSummary).toBe(3); // Default value
     });
 
     it('should respect user config overrides', async () => {
-      const userConfigPath = path.join(testEnv.workbenchHome, 'user-config.json');
+      // Set WORKBENCH_HOME to testEnv directory
+      process.env.WORKBENCH_HOME = testEnv.workbenchHome;
       
       await saveUserConfig({
         autoSummarize: false,
         minMessagesForSummary: 10,
-      }, userConfigPath);
+      });
 
-      const config = await loadUserConfig(userConfigPath);
+      const config = await loadUserConfig();
       expect(config.autoSummarize).toBe(false);
       expect(config.minMessagesForSummary).toBe(10);
     });

@@ -163,7 +163,7 @@ export async function runCommand(prompt: string, options: RunCommandOptions): Pr
     const sessionStorage = new SessionStorage();
 
     // 6.5. Load UserConfig for auto-summarization
-    const userConfig = await loadUserConfig(path.join(workbenchHome, 'user-config.json'));
+    const userConfig = await loadUserConfig();
 
     // 6.6. Create LanceDBMemoryStore for auto-memory
     const memoryStore = new LanceDBMemoryStore({

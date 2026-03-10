@@ -13,31 +13,41 @@ import {
 
 describe('user-config', () => {
   let tempDir: string;
-  let configPath: string;
+  let originalWorkbenchHome: string | undefined;
 
   beforeEach(async () => {
     // Create temp directory for each test
     tempDir = await mkdtemp(join(tmpdir(), 'user-config-test-'));
-    configPath = join(tempDir, 'user-config.json');
+    
+    // Save original WORKBENCH_HOME and set to temp dir
+    originalWorkbenchHome = process.env.WORKBENCH_HOME;
+    process.env.WORKBENCH_HOME = tempDir;
   });
 
   afterEach(async () => {
+    // Restore original WORKBENCH_HOME
+    if (originalWorkbenchHome !== undefined) {
+      process.env.WORKBENCH_HOME = originalWorkbenchHome;
+    } else {
+      delete process.env.WORKBENCH_HOME;
+    }
+    
     // Clean up temp directory
     await rm(tempDir, { recursive: true, force: true });
   });
 
   describe('loadUserConfig', () => {
     it('should return defaults when file does not exist', async () => {
-      const config = await loadUserConfig(configPath);
+      const config = await loadUserConfig();
       
       expect(config).toEqual(DEFAULT_USER_CONFIG);
     });
 
     it('should create file with defaults when it does not exist', async () => {
-      await loadUserConfig(configPath);
+      await loadUserConfig();
       
       // Load again and verify defaults were written
-      const config = await loadUserConfig(configPath);
+      const config = await loadUserConfig();
       expect(config).toEqual(DEFAULT_USER_CONFIG);
     });
 
@@ -46,10 +56,10 @@ describe('user-config', () => {
       const partialConfig: UserConfig = {
         autoSummarize: false,
       };
-      await saveUserConfig(partialConfig, configPath);
+      await saveUserConfig(partialConfig);
       
       // Load and verify merge
-      const loaded = await loadUserConfig(configPath);
+      const loaded = await loadUserConfig();
       expect(loaded.autoSummarize).toBe(false);
       expect(loaded.minMessagesForSummary).toBe(DEFAULT_USER_CONFIG.minMessagesForSummary);
     });
@@ -59,21 +69,24 @@ describe('user-config', () => {
         autoSummarize: false,
         minMessagesForSummary: 10,
       };
-      await saveUserConfig(customConfig, configPath);
+      await saveUserConfig(customConfig);
       
-      const loaded = await loadUserConfig(configPath);
+      const loaded = await loadUserConfig();
       expect(loaded).toEqual({
         autoSummarize: false,
         minMessagesForSummary: 10,
+        summarizerModel: DEFAULT_USER_CONFIG.summarizerModel,
+        memoryRetentionDays: DEFAULT_USER_CONFIG.memoryRetentionDays,
       });
     });
 
     it('should throw error on invalid JSON', async () => {
-      // Write invalid JSON
+      // Write invalid JSON to the expected config path
       const fs = await import('node:fs/promises');
+      const configPath = join(tempDir, 'config.json');
       await fs.writeFile(configPath, 'invalid json{', 'utf-8');
       
-      await expect(loadUserConfig(configPath)).rejects.toThrow();
+      await expect(loadUserConfig()).rejects.toThrow();
     });
   });
 
@@ -84,34 +97,37 @@ describe('user-config', () => {
         minMessagesForSummary: 5,
       };
       
-      await saveUserConfig(config, configPath);
+      await saveUserConfig(config);
       
       // Verify by loading
-      const loaded = await loadUserConfig(configPath);
+      const loaded = await loadUserConfig();
       expect(loaded.autoSummarize).toBe(false);
       expect(loaded.minMessagesForSummary).toBe(5);
     });
 
     it('should create directory if it does not exist', async () => {
-      const nestedPath = join(tempDir, 'nested', 'user-config.json');
+      // Set WORKBENCH_HOME to nested path
+      const nestedDir = join(tempDir, 'nested');
+      process.env.WORKBENCH_HOME = nestedDir;
+      
       const config: UserConfig = { autoSummarize: true };
       
-      await saveUserConfig(config, nestedPath);
+      await saveUserConfig(config);
       
       // Verify by loading
-      const loaded = await loadUserConfig(nestedPath);
+      const loaded = await loadUserConfig();
       expect(loaded.autoSummarize).toBe(true);
     });
 
     it('should overwrite existing file', async () => {
       // Save initial config
-      await saveUserConfig({ autoSummarize: true }, configPath);
+      await saveUserConfig({ autoSummarize: true });
       
       // Overwrite with new config
-      await saveUserConfig({ autoSummarize: false }, configPath);
+      await saveUserConfig({ autoSummarize: false });
       
       // Verify overwrite
-      const loaded = await loadUserConfig(configPath);
+      const loaded = await loadUserConfig();
       expect(loaded.autoSummarize).toBe(false);
     });
   });
