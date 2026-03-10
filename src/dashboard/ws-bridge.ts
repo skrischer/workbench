@@ -149,6 +149,30 @@ export function attachWebSocket(
     });
   }
 
+  // Session-message Events forwarden (mit dynamischem Event-Namen)
+  eventBus.on('session:message', (payload) => {
+    const dynamicEventName = `session:${payload.sessionId}:message`;
+    const message: EventMessage = {
+      type: 'event',
+      event: dynamicEventName,
+      data: payload,
+      timestamp: new Date().toISOString(),
+    };
+
+    const messageStr = JSON.stringify(message);
+
+    for (const client of clients.values()) {
+      // Check if client is subscribed to this event
+      const isSubscribed = Array.from(client.subscribedEvents).some((pattern) =>
+        matchesPattern(pattern, dynamicEventName)
+      );
+
+      if (isSubscribed && client.ws.readyState === 1) {
+        client.ws.send(messageStr);
+      }
+    }
+  });
+
   // WebSocket endpoint
   server.get('/ws', { websocket: true }, (socket, request) => {
     // Token-based authentication (if configured)

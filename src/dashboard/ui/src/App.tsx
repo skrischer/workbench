@@ -3,6 +3,8 @@ import RunsPage from './pages/RunsPage.js';
 import RunDetailPage from './pages/RunDetailPage.js';
 import { PlansPage } from './pages/PlansPage.js';
 import { PlanDetailPage } from './pages/PlanDetailPage.js';
+import { SessionsPage } from './pages/SessionsPage.js';
+import SessionDetailPage from './pages/SessionDetailPage.js';
 
 function HomePage() {
   return (
@@ -17,6 +19,9 @@ function HomePage() {
           </Link>
           <Link to="/plans" className="text-blue-600 hover:text-blue-800 underline">
             View Plans
+          </Link>
+          <Link to="/sessions" className="text-blue-600 hover:text-blue-800 underline">
+            View Sessions
           </Link>
         </nav>
       </div>
@@ -33,6 +38,8 @@ export default function App() {
         <Route path="/runs/:id" element={<RunDetailPage />} />
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/plans/:id" element={<PlanDetailPage />} />
+        <Route path="/sessions" element={<SessionsPage />} />
+        <Route path="/sessions/:id" element={<SessionDetailPage />} />
       </Routes>
     </BrowserRouter>
   );
