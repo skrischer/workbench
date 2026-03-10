@@ -4,6 +4,7 @@ import RunDetailPage from './pages/RunDetailPage.js';
 import { PlansPage } from './pages/PlansPage.js';
 import { PlanDetailPage } from './pages/PlanDetailPage.js';
 import { SessionsPage } from './pages/SessionsPage.js';
+import SessionDetailPage from './pages/SessionDetailPage.js';
 
 function HomePage() {
   return (
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/plans/:id" element={<PlanDetailPage />} />
         <Route path="/sessions" element={<SessionsPage />} />
+        <Route path="/sessions/:id" element={<SessionDetailPage />} />
       </Routes>
     </BrowserRouter>
   );
