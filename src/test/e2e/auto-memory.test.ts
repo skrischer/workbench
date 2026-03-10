@@ -41,6 +41,8 @@ describe('E2E Auto-Memory Storage', () => {
       await testEnv?.cleanup();
     });
 
+    // TODO Epic 27: This test is slow (10-15s) due to synchronous embedding generation.
+    // After async-embeddings refactor, should complete in <10s.
     it('should create memory entry after successful run', async () => {
       const result = await runCli({
         args: ['run', 'Hello, this is a test run with multiple messages'],

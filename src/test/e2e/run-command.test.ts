@@ -71,6 +71,8 @@ describe('E2E - workbench run command', () => {
       await testEnv?.cleanup();
     });
 
+    // TODO Epic 27: Multi-step agent-loop tests are slow (8-12s) due to LLM calls + tool execution.
+    // After async optimizations, should complete in <10s.
     it('should handle tool use and continue to completion', async () => {
       const result = await runCli({
         args: ['run', 'read the file'],
@@ -254,6 +256,8 @@ describe('E2E - workbench run command', () => {
         await testEnv?.cleanup();
       });
 
+      // TODO Epic 27: Multi-step agent-loop tests are slow (8-12s) due to LLM calls + tool execution.
+      // After async optimizations, should complete in <10s.
       it('should respect --max-steps limit', async () => {
         const result = await runCli({
           args: ['run', '--max-steps', '1', 'test'],

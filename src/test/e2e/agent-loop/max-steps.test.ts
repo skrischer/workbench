@@ -55,6 +55,7 @@ describe('E2E Agent Loop - Max Steps Limit', () => {
       await testEnv?.cleanup();
     });
 
+    // TODO Epic 27: Test duration 8-10s (CLI spawn + mock server + tool execution).
     it('should stop after exactly 3 tool calls with --max-steps 3', async () => {
       const result = await runCli({
         args: ['run', 'keep reading files', '--max-steps', '3'],
