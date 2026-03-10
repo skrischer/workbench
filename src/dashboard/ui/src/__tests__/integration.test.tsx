@@ -655,52 +655,57 @@ describe('Dashboard Integration Tests', () => {
           createdAt: '2024-03-08T10:00:00Z',
           metadata: {
             model: 'claude-sonnet-4',
-            thinkingLevel: 'medium',
+            originalPrompt: 'Implement user authentication',
           },
           steps: [
             {
               id: 'step-1',
               title: 'Create auth controller',
+              prompt: 'Create auth controller',
               status: 'completed',
-              agentType: 'coder',
             },
             {
               id: 'step-2',
               title: 'Add JWT middleware',
+              prompt: 'Add JWT middleware',
               status: 'running',
-              agentType: 'coder',
             },
             {
               id: 'step-3',
               title: 'Write tests',
+              prompt: 'Write tests',
               status: 'pending',
-              agentType: 'tester',
             },
           ],
+          currentStepIndex: 1,
+          updatedAt: '2024-03-08T10:00:00Z',
         },
         {
           id: 'plan-2',
           title: 'Database optimization',
+          description: 'Optimize database performance',
           status: 'completed',
           createdAt: '2024-03-07T14:30:00Z',
           metadata: {
             model: 'claude-sonnet-4',
-            thinkingLevel: 'low',
+            originalPrompt: 'Database optimization',
           },
           steps: [
             {
               id: 'step-1',
               title: 'Add indexes',
+              prompt: 'Add indexes',
               status: 'completed',
-              agentType: 'coder',
             },
             {
               id: 'step-2',
               title: 'Optimize queries',
+              prompt: 'Optimize queries',
               status: 'completed',
-              agentType: 'coder',
             },
           ],
+          currentStepIndex: 2,
+          updatedAt: '2024-03-07T14:30:00Z',
         },
       ];
 
