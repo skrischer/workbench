@@ -1,5 +1,6 @@
 // src/runtime/agent-loop.ts — Consolidated Agent Runtime Loop with Lifecycle Hooks
 
+import { randomUUID } from 'node:crypto';
 import type {
   AgentConfig,
   RunResult,
@@ -56,15 +57,32 @@ export interface AgentLoopHooks {
 export class AgentLoop {
   private activeControllers: Map<string, AbortController> = new Map();
   private permissionGuard?: PermissionGuard;
+  private agentId: string;
+  private anthropicClient: AnthropicClient;
+  private sessionStorage: SessionStorage;
+  private toolRegistry: ToolRegistry;
+  private config: AgentConfig;
+  private eventBus?: TypedEventBus;
+  private hooks?: AgentLoopHooks;
 
   constructor(
-    private anthropicClient: AnthropicClient,
-    private sessionStorage: SessionStorage,
-    private toolRegistry: ToolRegistry,
-    private config: AgentConfig,
-    private eventBus?: TypedEventBus,
-    private hooks?: AgentLoopHooks
+    anthropicClient: AnthropicClient,
+    sessionStorage: SessionStorage,
+    toolRegistry: ToolRegistry,
+    config: AgentConfig,
+    eventBus?: TypedEventBus,
+    hooks?: AgentLoopHooks,
+    agentId?: string
   ) {
+    // Generate agentId if not provided (for backward compatibility)
+    this.agentId = agentId ?? randomUUID();
+    this.anthropicClient = anthropicClient;
+    this.sessionStorage = sessionStorage;
+    this.toolRegistry = toolRegistry;
+    this.config = config;
+    this.eventBus = eventBus;
+    this.hooks = hooks;
+
     // Initialize permission guard if allowedPaths are configured
     if (config.allowedPaths && config.allowedPaths.length > 0) {
       this.permissionGuard = new PermissionGuard(config.allowedPaths);
@@ -78,7 +96,7 @@ export class AgentLoop {
    */
   async run(prompt: string): Promise<RunResult> {
     // 1. Create session
-    const session = await this.sessionStorage.create('agent-runtime');
+    const session = await this.sessionStorage.create(this.agentId);
     const runId = session.id;
     
     // Create AbortController for this run
@@ -522,6 +540,7 @@ export class AgentLoop {
       // Build ToolContext with AbortSignal and PermissionGuard
       const abortController = this.activeControllers.get(runId);
       const context: ToolContext = {
+        agentId: this.agentId,
         signal: abortController?.signal,
         permissions: this.permissionGuard,
         eventBus: this.eventBus,

@@ -62,6 +62,7 @@ export class AgentRegistry {
         tools: config.tools,
         maxSteps: config.maxSteps || 10,
       },
+      parentId: config.parentId,
       sessionId,
       createdAt: new Date().toISOString(),
       metadata: {},

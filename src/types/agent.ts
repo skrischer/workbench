@@ -63,6 +63,9 @@ export interface SpawnConfig {
 
   /** Optional: Path allowlist with glob patterns for file access control */
   allowedPaths?: string[];
+
+  /** Optional: Parent agent ID for hierarchy tracking */
+  parentId?: string;
 }
 
 /** Message passed between agents */

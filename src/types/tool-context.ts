@@ -9,6 +9,12 @@ import type { PermissionGuard } from '../tools/permissions.js';
  */
 export interface ToolContext {
   /**
+   * The ID of the agent executing this tool.
+   * Used for parent-child tracking when spawning sub-agents.
+   */
+  agentId: string;
+
+  /**
    * AbortSignal for cancelling long-running operations.
    * Tools should check signal.aborted and listen to 'abort' events.
    */
