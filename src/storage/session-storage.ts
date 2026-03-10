@@ -49,6 +49,45 @@ export class SessionStorage {
   }
 
   /**
+   * Create a new session with optional initial prompt
+   * @param agentId - The ID of the agent (optional)
+   * @param initialPrompt - Initial user message to add to the session (optional)
+   * @returns The newly created session
+   */
+  async createSession(agentId?: string, initialPrompt?: string): Promise<Session> {
+    const sessionId = randomUUID();
+    const now = new Date().toISOString();
+    
+    const session: Session = {
+      id: sessionId,
+      agentId: agentId ?? 'default',
+      messages: [],
+      toolCalls: [],
+      status: 'active' as SessionStatus,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    // Add initial prompt if provided
+    if (initialPrompt) {
+      session.messages.push({
+        role: 'user',
+        content: initialPrompt,
+        timestamp: now,
+      });
+    }
+
+    // Create session directory
+    const sessionDir = path.join(this.baseDir, sessionId);
+    await fs.mkdir(sessionDir, { recursive: true });
+
+    // Save initial session
+    await this.save(session);
+
+    return session;
+  }
+
+  /**
    * Load a session from disk
    * @param id - The session ID
    * @returns The loaded session
@@ -117,6 +156,26 @@ export class SessionStorage {
 
     // Append message
     session.messages.push(sessionMessage);
+
+    // Save updated session
+    await this.save(session);
+  }
+
+  /**
+   * Append a message to an existing session (simplified API for REST endpoints)
+   * @param id - The session ID
+   * @param message - The message to append (role + content)
+   */
+  async appendMessage(id: string, message: { role: 'user' | 'assistant' | 'system'; content: string }): Promise<void> {
+    // Load session
+    const session = await this.load(id);
+
+    // Append message with timestamp
+    session.messages.push({
+      role: message.role,
+      content: message.content,
+      timestamp: new Date().toISOString(),
+    });
 
     // Save updated session
     await this.save(session);

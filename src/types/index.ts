@@ -85,6 +85,7 @@ export type SessionStatus = 'active' | 'paused' | 'completed' | 'failed';
 export interface Session {
   id: string;
   agentId: string;
+  parentId?: string; // Optional parent session ID for nested/spawned sessions
   messages: Message[];
   toolCalls: ToolCall[];
   status: SessionStatus;
