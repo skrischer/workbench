@@ -45,6 +45,7 @@ export interface EventMap {
   'model:fallback:triggered': { from: string; to: string; reason: string; statusCode?: number; timestamp: string };
   'model:fallback:exhausted': { attemptedModels: string[]; finalError: string; timestamp: string };
   'model:cooldown:start': { model: string; durationMs: number; expiresAt: string; reason: string };
+  'session:message': { sessionId: string; message: Message };
 }
 
 /** Event listener function */

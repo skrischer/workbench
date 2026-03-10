@@ -5,6 +5,8 @@ import path from 'node:path';
 import type { Session, SessionStatus, StorageMessage, StorageListOptions, StorageListResult } from '../types/index.js';
 import { createNotFoundError } from '../types/errors.js';
 import { normalizeListOptions } from '../types/index.js';
+import type { TypedEventBus } from '../events/event-bus.js';
+import type { EventMap } from '../types/events.js';
 
 /**
  * SessionStorage — Manages session persistence as JSON files
@@ -13,10 +15,12 @@ import { normalizeListOptions } from '../types/index.js';
  */
 export class SessionStorage {
   private baseDir: string;
+  private eventBus?: TypedEventBus<EventMap>;
 
-  constructor(baseDir?: string) {
+  constructor(baseDir?: string, eventBus?: TypedEventBus<EventMap>) {
     const workbenchHome = process.env.WORKBENCH_HOME ?? path.join(homedir(), '.workbench');
     this.baseDir = baseDir ?? path.join(workbenchHome, 'sessions');
+    this.eventBus = eventBus;
   }
 
   /**
@@ -171,11 +175,15 @@ export class SessionStorage {
     const session = await this.load(id);
 
     // Append message with timestamp
-    session.messages.push({
+    const newMessage = {
       role: message.role,
       content: message.content,
       timestamp: new Date().toISOString(),
-    });
+    };
+    session.messages.push(newMessage);
+
+    // Emit event before saving
+    this.eventBus?.emit('session:message', { sessionId: id, message: newMessage });
 
     // Save updated session
     await this.save(session);
