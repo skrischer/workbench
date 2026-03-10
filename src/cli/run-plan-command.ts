@@ -26,6 +26,7 @@ import { DEFAULT_MODEL } from '../config/index.js';
 export interface RunPlanCommandOptions {
   resume?: boolean;
   model?: string;
+  noSummarize?: boolean;
 }
 
 /**
@@ -275,6 +276,7 @@ export function createRunPlanCommand(): Command {
     .argument('<plan-id>', 'Plan ID to execute')
     .option('--resume', 'Resume a paused or failed plan from current step')
     .option('--model <model>', 'Override LLM model')
+    .option('--no-summarize', 'Disable automatic session summarization')
     .action(async (planId: string, options: RunPlanCommandOptions) => {
       await runPlanCommand(planId, options);
     });

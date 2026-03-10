@@ -7,6 +7,7 @@ import { createPlansCommand } from './plans-command.js';
 import { createDashboardCommand } from './dashboard-command.js';
 import { createWorkflowCommands } from './workflow-commands.js';
 import { createAuthCommand } from './auth-command.js';
+import { createConfigCommand } from './config-command.js';
 
 const program = new Command();
 
@@ -29,7 +30,8 @@ program
   .option('--model <model>', 'Override LLM model')
   .option('--max-steps <n>', 'Override max steps', parseInt)
   .option('--config <path>', 'Path to agent config JSON file')
-  .action(async (prompt: string, options: { model?: string; maxSteps?: number; config?: string }) => {
+  .option('--no-summarize', 'Disable automatic session summarization')
+  .action(async (prompt: string, options: { model?: string; maxSteps?: number; config?: string; noSummarize?: boolean }) => {
     await runCommand(prompt, options);
   });
 
@@ -43,6 +45,9 @@ program.addCommand(createDashboardCommand());
 
 // Register auth command
 program.addCommand(createAuthCommand());
+
+// Register config command
+program.addCommand(createConfigCommand());
 
 // Register workflow commands
 for (const cmd of createWorkflowCommands()) {

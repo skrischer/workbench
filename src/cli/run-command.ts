@@ -22,6 +22,7 @@ export interface RunCommandOptions {
   model?: string;
   maxSteps?: number;
   config?: string;
+  noSummarize?: boolean;
 }
 
 /**

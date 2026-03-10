@@ -281,3 +281,6 @@ export type { ToolContext } from './tool-context.js';
 // Storage Pagination Types
 export type { StorageListOptions, StorageListResult } from './storage.js';
 export { normalizeListOptions } from './storage.js';
+// User Configuration Types
+export type { UserConfig } from '../config/user-config.js';
+export { DEFAULT_USER_CONFIG, loadUserConfig, saveUserConfig, getConfigValue, setConfigValue } from '../config/user-config.js';
