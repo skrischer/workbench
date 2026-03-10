@@ -222,4 +222,25 @@ export class RunLogger {
       throw new Error(`Failed to list runs: ${error}`);
     }
   }
+
+  /**
+   * Update run metadata (e.g., add memoryId after summarization)
+   * @param runId - Run ID to update
+   * @param metadata - Updated metadata object
+   */
+  async updateRunMetadata(runId: string, metadata: RunMetadata): Promise<void> {
+    const runDir = join(this.baseDir, 'runs', runId);
+    const runJsonPath = join(runDir, 'run.json');
+
+    if (!existsSync(runJsonPath)) {
+      throw createNotFoundError('Run', runId);
+    }
+
+    try {
+      // Write updated metadata to run.json
+      await writeFile(runJsonPath, JSON.stringify(metadata, null, 2));
+    } catch (error) {
+      throw new Error(`Failed to update run metadata for ${runId}: ${error}`);
+    }
+  }
 }

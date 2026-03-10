@@ -29,7 +29,8 @@ program
   .option('--model <model>', 'Override LLM model')
   .option('--max-steps <n>', 'Override max steps', parseInt)
   .option('--config <path>', 'Path to agent config JSON file')
-  .action(async (prompt: string, options: { model?: string; maxSteps?: number; config?: string }) => {
+  .option('--no-summarize', 'Disable automatic session summarization')
+  .action(async (prompt: string, options: { model?: string; maxSteps?: number; config?: string; noSummarize?: boolean }) => {
     await runCommand(prompt, options);
   });
 

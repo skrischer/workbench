@@ -13,6 +13,7 @@ export interface RunMetadata {
   status: RunLogStatus;
   prompt: string;
   tokenUsage?: TokenUsage;
+  memoryId?: string; // Memory ID if auto-summarization was enabled
 }
 
 /** Message entry for messages.json */
