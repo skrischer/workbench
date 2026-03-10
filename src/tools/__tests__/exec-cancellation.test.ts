@@ -22,6 +22,7 @@ describe('ExecTool Cancellation', () => {
 
     it('should execute with context but without signal', async () => {
       const context: ToolContext = {
+        agentId: 'test-agent',
         metadata: { runId: 'test-1' },
       };
 
@@ -45,6 +46,7 @@ describe('ExecTool Cancellation', () => {
       abortController.abort();
 
       const context: ToolContext = {
+        agentId: 'test-agent',
         signal: abortController.signal,
       };
 
@@ -61,6 +63,7 @@ describe('ExecTool Cancellation', () => {
     it('should abort a long-running command when signal fires', async () => {
       const abortController = new AbortController();
       const context: ToolContext = {
+        agentId: 'test-agent',
         signal: abortController.signal,
       };
 
@@ -80,6 +83,7 @@ describe('ExecTool Cancellation', () => {
     it('should abort a command that produces continuous output', async () => {
       const abortController = new AbortController();
       const context: ToolContext = {
+        agentId: 'test-agent',
         signal: abortController.signal,
       };
 
@@ -102,6 +106,7 @@ describe('ExecTool Cancellation', () => {
     it('should handle multiple abort calls gracefully', async () => {
       const abortController = new AbortController();
       const context: ToolContext = {
+        agentId: 'test-agent',
         signal: abortController.signal,
       };
 
@@ -124,6 +129,7 @@ describe('ExecTool Cancellation', () => {
     it('should ensure child process is killed after abort', async () => {
       const abortController = new AbortController();
       const context: ToolContext = {
+        agentId: 'test-agent',
         signal: abortController.signal,
       };
 
@@ -147,6 +153,7 @@ describe('ExecTool Cancellation', () => {
     it('should handle abort of already-completed command', async () => {
       const abortController = new AbortController();
       const context: ToolContext = {
+        agentId: 'test-agent',
         signal: abortController.signal,
       };
 
@@ -166,6 +173,7 @@ describe('ExecTool Cancellation', () => {
     it('should respect timeout even when signal is provided', async () => {
       const abortController = new AbortController();
       const context: ToolContext = {
+        agentId: 'test-agent',
         signal: abortController.signal,
       };
 
@@ -187,6 +195,7 @@ describe('ExecTool Cancellation', () => {
     it('should cancel before timeout if signal fires first', async () => {
       const abortController = new AbortController();
       const context: ToolContext = {
+        agentId: 'test-agent',
         signal: abortController.signal,
       };
 
@@ -214,6 +223,7 @@ describe('ExecTool Cancellation', () => {
     it('should respect cwd even when cancelled', async () => {
       const abortController = new AbortController();
       const context: ToolContext = {
+        agentId: 'test-agent',
         signal: abortController.signal,
       };
 

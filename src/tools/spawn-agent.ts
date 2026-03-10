@@ -63,6 +63,9 @@ export class SpawnAgentTool extends BaseTool {
 
   async execute(input: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     try {
+      // Extract parent agent ID from context (if available)
+      const parentId = context?.agentId;
+
       // Build config from input
       const config: SpawnConfig = {
         role: input.role as SpawnConfig['role'],
@@ -72,6 +75,7 @@ export class SpawnAgentTool extends BaseTool {
         tools: input.tools as string[] | undefined,
         maxSteps: input.maxSteps as number | undefined,
         cwd: input.cwd as string | undefined,
+        parentId,
       };
 
       // Privilege check: prevent spawning planner agents

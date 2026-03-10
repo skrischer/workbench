@@ -94,7 +94,15 @@ describe('AgentLoop - Consolidated with Hooks', () => {
 
   describe('Test 1: Basic Loop without Hooks', () => {
     it('should run without hooks and complete successfully', async () => {
-      const loop = new AgentLoop(client, storage, registry, defaultConfig, eventBus);
+      const loop = new AgentLoop(
+        client,
+        storage,
+        registry,
+        defaultConfig,
+        eventBus,
+        undefined, // hooks
+        'agent-runtime' // agentId
+      );
 
       const result = await loop.run('Hello, world!');
 
@@ -124,7 +132,15 @@ describe('AgentLoop - Consolidated with Hooks', () => {
         usage: { input_tokens: 100, output_tokens: 50 },
       });
 
-      const loop = new AgentLoop(loopingClient, storage, registry, shortConfig, eventBus);
+      const loop = new AgentLoop(
+        loopingClient,
+        storage,
+        registry,
+        shortConfig,
+        eventBus,
+        undefined, // hooks
+        'agent-runtime' // agentId
+      );
 
       const result = await loop.run('Complex task');
 

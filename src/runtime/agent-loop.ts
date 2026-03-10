@@ -1,5 +1,6 @@
 // src/runtime/agent-loop.ts — Consolidated Agent Runtime Loop with Lifecycle Hooks
 
+import { randomUUID } from 'node:crypto';
 import type {
   AgentConfig,
   RunResult,
@@ -56,15 +57,39 @@ export interface AgentLoopHooks {
 export class AgentLoop {
   private activeControllers: Map<string, AbortController> = new Map();
   private permissionGuard?: PermissionGuard;
+  private agentId: string;
+  private anthropicClient: AnthropicClient;
+  private sessionStorage: SessionStorage;
+  private toolRegistry: ToolRegistry;
+  private config: AgentConfig;
+  private eventBus?: TypedEventBus;
+  private hooks?: AgentLoopHooks;
+  private agentRegistry?: any; // AgentRegistry (avoid circular import)
+  private orchestrator?: any; // Orchestrator (avoid circular import)
 
   constructor(
-    private anthropicClient: AnthropicClient,
-    private sessionStorage: SessionStorage,
-    private toolRegistry: ToolRegistry,
-    private config: AgentConfig,
-    private eventBus?: TypedEventBus,
-    private hooks?: AgentLoopHooks
+    anthropicClient: AnthropicClient,
+    sessionStorage: SessionStorage,
+    toolRegistry: ToolRegistry,
+    config: AgentConfig,
+    eventBus?: TypedEventBus,
+    hooks?: AgentLoopHooks,
+    agentId?: string,
+    agentRegistry?: any,
+    orchestrator?: any
   ) {
+    // Generate agentId if not provided (for backward compatibility)
+    // Default to 'agent-runtime' for tests, otherwise UUID
+    this.agentId = agentId ?? 'agent-runtime';
+    this.anthropicClient = anthropicClient;
+    this.sessionStorage = sessionStorage;
+    this.toolRegistry = toolRegistry;
+    this.config = config;
+    this.eventBus = eventBus;
+    this.hooks = hooks;
+    this.agentRegistry = agentRegistry;
+    this.orchestrator = orchestrator;
+
     // Initialize permission guard if allowedPaths are configured
     if (config.allowedPaths && config.allowedPaths.length > 0) {
       this.permissionGuard = new PermissionGuard(config.allowedPaths);
@@ -78,7 +103,7 @@ export class AgentLoop {
    */
   async run(prompt: string): Promise<RunResult> {
     // 1. Create session
-    const session = await this.sessionStorage.create('agent-runtime');
+    const session = await this.sessionStorage.create(this.agentId);
     const runId = session.id;
     
     // Create AbortController for this run
@@ -241,6 +266,26 @@ export class AgentLoop {
                 // Mark as hook error so it can be re-thrown in the main catch block
                 (hookError as any).__isHookError = true;
                 throw hookError;
+              }
+            }
+
+            // 6. After spawn_agent tool execution: run the spawned agent
+            if (toolUse.name === 'spawn_agent' && !toolResult.is_error && this.orchestrator) {
+              try {
+                // Extract agentId from metadata (spawn_agent returns it in metadata.id)
+                const agentId = toolResult.metadata?.id as string | undefined;
+                
+                if (agentId) {
+                  // Fire-and-forget: run agent in background
+                  // We don't await here to allow parent agent to continue
+                  this.orchestrator.runAgent(agentId).catch((error: Error) => {
+                    console.error(`[AgentLoop] Failed to run spawned agent ${agentId}:`, error);
+                  });
+                } else {
+                  console.error('[AgentLoop] spawn_agent succeeded but no agentId in metadata');
+                }
+              } catch (error) {
+                console.error('[AgentLoop] Failed to handle spawn_agent:', error);
               }
             }
           }
@@ -472,9 +517,9 @@ export class AgentLoop {
   }
 
   /**
-   * Execute a tool and return the result as ToolResultBlock
+   * Execute a tool and return the result as ToolResultBlock with metadata
    */
-  private async executeTool(toolUse: ToolUseBlock, runId: string): Promise<ToolResultBlock> {
+  private async executeTool(toolUse: ToolUseBlock, runId: string): Promise<ToolResultBlock & { metadata?: Record<string, unknown> }> {
     try {
       const tool = this.toolRegistry.get(toolUse.name);
       
@@ -522,6 +567,7 @@ export class AgentLoop {
       // Build ToolContext with AbortSignal and PermissionGuard
       const abortController = this.activeControllers.get(runId);
       const context: ToolContext = {
+        agentId: this.agentId,
         signal: abortController?.signal,
         permissions: this.permissionGuard,
         eventBus: this.eventBus,
@@ -538,6 +584,7 @@ export class AgentLoop {
         tool_use_id: toolUse.id,
         content: result.success ? result.output : `Error: ${result.error ?? 'Unknown error'}`,
         is_error: !result.success,
+        metadata: result.metadata, // Preserve metadata (e.g., agentId from spawn_agent)
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

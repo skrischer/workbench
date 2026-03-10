@@ -17,6 +17,9 @@ import type { AgentLoopHooks } from '../runtime/agent-loop.js';
 import { loadUserConfig } from '../config/user-config.js';
 import { LanceDBMemoryStore } from '../memory/lancedb-store.js';
 import { createAutoMemoryHook } from '../memory/auto-memory.js';
+import { AgentRegistry } from '../multi-agent/agent-registry.js';
+import { MessageBus } from '../multi-agent/message-bus.js';
+import { AgentOrchestrator } from '../multi-agent/orchestrator.js';
 
 /**
  * CLI run command options
@@ -102,8 +105,16 @@ class LoggingToolRegistry extends ToolRegistry {
  */
 export async function runCommand(prompt: string, options: RunCommandOptions): Promise<void> {
   try {
-    // 1. Create ToolRegistry early (needed for config validation)
-    const baseRegistry = createDefaultTools();
+    // 1. Create multi-agent infrastructure (needed for default tools)
+    const agentRegistry = new AgentRegistry();
+    const messageBus = new MessageBus();
+    
+    // 2. Create ToolRegistry early (needed for config validation)
+    // Note: memoryStore is added later after workbenchHome is configured
+    const baseRegistry = createDefaultTools({
+      agentRegistry,
+      messageBus,
+    });
     
     // 2. Load agent config (with CLI overrides)
     let agentConfig: AgentConfig;
@@ -169,6 +180,21 @@ export async function runCommand(prompt: string, options: RunCommandOptions): Pr
     const memoryStore = new LanceDBMemoryStore({
       dbPath: path.join(workbenchHome, 'memory'),
     });
+    
+    // 6.7. Register memory tools now that store is available
+    const { RememberTool } = await import('../tools/remember.js');
+    const { RecallTool } = await import('../tools/recall.js');
+    baseRegistry.register(new RememberTool(memoryStore));
+    baseRegistry.register(new RecallTool(memoryStore));
+
+    // 6.8. Create AgentOrchestrator
+    const orchestrator = new AgentOrchestrator(
+      agentRegistry,
+      messageBus,
+      anthropicClient,
+      sessionStorage,
+      baseRegistry // Pass base registry (not the logging wrapper)
+    );
 
     // 7. Create RunLogger and define hooks
     const runLogger = new RunLogger(workbenchHome);
@@ -224,14 +250,17 @@ export async function runCommand(prompt: string, options: RunCommandOptions): Pr
       },
     };
 
-    // 8. Create CoreAgentLoop with hooks
+    // 8. Create CoreAgentLoop with hooks and orchestrator
     const agentLoop = new CoreAgentLoop(
       anthropicClient,
       sessionStorage,
       toolRegistry,
       agentConfig,
       undefined, // eventBus
-      hooks
+      hooks,
+      undefined, // agentId (auto-generated)
+      agentRegistry,
+      orchestrator
     );
 
     // 9. Run agent loop
