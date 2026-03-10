@@ -7,6 +7,7 @@ import { createPlansCommand } from './plans-command.js';
 import { createDashboardCommand } from './dashboard-command.js';
 import { createWorkflowCommands } from './workflow-commands.js';
 import { createAuthCommand } from './auth-command.js';
+import { createCleanupCommand } from './cleanup-command.js';
 
 const program = new Command();
 
@@ -43,6 +44,9 @@ program.addCommand(createDashboardCommand());
 
 // Register auth command
 program.addCommand(createAuthCommand());
+
+// Register cleanup command
+program.addCommand(createCleanupCommand());
 
 // Register workflow commands
 for (const cmd of createWorkflowCommands()) {

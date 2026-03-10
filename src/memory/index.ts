@@ -6,6 +6,8 @@ export { SUMMARY_PROMPT, createSessionPrompt } from './summary-prompt.js';
 export type { LLMCallback, SummarizerConfig } from './session-summarizer.js';
 export { LanceDBMemoryStore } from './lancedb-store.js';
 export { EmbeddingProvider } from './embeddings.js';
+export { cleanupOldMemories, getDefaultRetentionDays } from './memory-cleanup.js';
+export type { CleanupResult, CleanupOptions } from './memory-cleanup.js';
 export type {
   MemoryType,
   MemorySource,
