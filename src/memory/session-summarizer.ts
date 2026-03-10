@@ -404,14 +404,60 @@ function generateFallbackSummary(messages: Message[], filesModified: string[]): 
     ? firstUserMessage.content.substring(0, 100) + (firstUserMessage.content.length > 100 ? '...' : '')
     : 'No user input';
 
+  // Extract tool names from assistant messages with tool_use blocks
+  const toolNames = new Set<string>();
+  const assistantMessages = messages.filter(m => m.role === 'assistant');
+  assistantMessages.forEach(msg => {
+    if (msg.toolUses && Array.isArray(msg.toolUses)) {
+      msg.toolUses.forEach(toolUse => {
+        toolNames.add(toolUse.name);
+      });
+    }
+  });
+
+  // Extract error messages (case-insensitive regex for Error:, Failed:, Exception)
+  const errorPattern = /\b(error|failed|exception)[:\s]/i;
+  const errorMessages: string[] = [];
+  messages.forEach(msg => {
+    const content = typeof msg.content === 'string' ? msg.content : '';
+    if (errorPattern.test(content)) {
+      // Extract first line containing error keyword
+      const lines = content.split('\n');
+      const errorLine = lines.find(line => errorPattern.test(line));
+      if (errorLine) {
+        errorMessages.push(errorLine.substring(0, 80).trim());
+      }
+    }
+  });
+
+  // Detect success indicators (case-insensitive)
+  const successPattern = /\b(done|success|completed|finished|resolved)\b/i;
+  const hasSuccessIndicator = messages.some(msg => {
+    const content = typeof msg.content === 'string' ? msg.content : '';
+    return successPattern.test(content);
+  });
+
+  // Build summary
   let summary = `Session with ${messageCount} messages involving ${Array.from(roles).join(', ')}. `;
   
   if (toolMessages.length > 0) {
-    summary += `${toolMessages.length} tool calls were made. `;
+    summary += `${toolMessages.length} tool calls were made`;
+    if (toolNames.size > 0) {
+      summary += ` (${Array.from(toolNames).slice(0, 5).join(', ')}${toolNames.size > 5 ? '...' : ''})`;
+    }
+    summary += '. ';
   }
   
   if (filesModified.length > 0) {
     summary += `Modified files: ${filesModified.slice(0, 5).join(', ')}${filesModified.length > 5 ? '...' : ''}. `;
+  }
+
+  if (errorMessages.length > 0) {
+    summary += `Errors encountered: ${errorMessages[0]}${errorMessages.length > 1 ? ` (+${errorMessages.length - 1} more)` : ''}. `;
+  }
+
+  if (hasSuccessIndicator) {
+    summary += `Task completed successfully. `;
   }
   
   summary += `Context: ${userContext}`;

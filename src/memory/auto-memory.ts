@@ -125,9 +125,14 @@ export function createAutoMemoryHook(config: AutoMemoryConfig): AgentLoopHooks['
       await config.memoryStore.init();
       const savedMemory = await config.memoryStore.add(memoryEntry);
 
-      // 8. Update RunMetadata with memoryId
-      runLog.metadata.memoryId = savedMemory.id;
-      await config.runLogger.updateRunMetadata(context.runId, runLog.metadata);
+      // 8. Update RunMetadata with memoryId (reload-before-update to avoid race conditions)
+      const freshRunLog = await config.runLogger.loadRun(context.runId);
+      if (freshRunLog) {
+        freshRunLog.metadata.memoryId = savedMemory.id;
+        await config.runLogger.updateRunMetadata(context.runId, freshRunLog.metadata);
+      } else {
+        console.warn(`[auto-memory] Could not reload run log ${context.runId} for metadata update`);
+      }
 
       console.error(`✅ [auto-memory] Saved summary to memory: ${savedMemory.id}`);
 
