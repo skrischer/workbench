@@ -3,6 +3,9 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
+import fastifyStatic from '@fastify/static';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { DashboardConfig } from './config.js';
 import { getDashboardConfig } from './config.js';
 
@@ -47,6 +50,16 @@ export async function createServer(config: DashboardConfig = {}): Promise<Fastif
   // Register WebSocket plugin
   await fastify.register(websocket);
 
+  // Register static file serving for the React dashboard
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const uiDistPath = path.join(__dirname, 'ui', 'dist');
+  
+  await fastify.register(fastifyStatic, {
+    root: uiDistPath,
+    prefix: '/',
+  });
+
   // Health check endpoint
   fastify.get<{ Reply: HealthResponse }>('/health', async (_request, reply) => {
     const uptime = Math.floor((Date.now() - serverStartTime) / 1000);
@@ -56,6 +69,14 @@ export async function createServer(config: DashboardConfig = {}): Promise<Fastif
       uptime,
       version: VERSION,
     });
+  });
+
+  // SPA fallback: serve index.html for all non-API routes
+  fastify.setNotFoundHandler((request, reply) => {
+    if (!request.url.startsWith('/api/')) {
+      return reply.sendFile('index.html');
+    }
+    reply.code(404).send({ error: 'Not Found' });
   });
 
   // Graceful shutdown handlers
