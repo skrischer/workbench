@@ -6,15 +6,17 @@ import TextInput from 'ink-text-input';
 import { MessageList } from './message-list.js';
 import { useRuntimeContext } from '../context.js';
 import type { ChatMessage } from '../types.js';
+import { theme } from '../theme.js';
 
 export interface ChatPanelProps {
   messages: ChatMessage[];
   streamingText?: string;
   onSendMessage: (prompt: string) => void;
   hasActiveSession: boolean;
+  hasAnySessions?: boolean;
 }
 
-export function ChatPanel({ messages, streamingText, onSendMessage, hasActiveSession }: ChatPanelProps): React.ReactElement {
+export function ChatPanel({ messages, streamingText, onSendMessage, hasActiveSession, hasAnySessions = true }: ChatPanelProps): React.ReactElement {
   const [inputValue, setInputValue] = useState('');
   const { isRunning } = useRuntimeContext();
 
@@ -29,8 +31,8 @@ export function ChatPanel({ messages, streamingText, onSendMessage, hasActiveSes
   );
 
   return (
-    <Box flexDirection="column" flexGrow={1} borderStyle="single" borderColor="gray" paddingX={1}>
-      {!hasActiveSession ? (
+    <Box flexDirection="column" flexGrow={1} borderStyle="single" borderColor={theme.border} paddingX={1}>
+      {!hasActiveSession && !hasAnySessions ? (
         <Box flexGrow={1} alignItems="center" justifyContent="center">
           <Text dimColor>Press Ctrl+N for new session</Text>
         </Box>
@@ -39,9 +41,9 @@ export function ChatPanel({ messages, streamingText, onSendMessage, hasActiveSes
           <Box flexDirection="column" flexGrow={1} overflow="hidden">
             <MessageList messages={messages} streamingText={streamingText} />
           </Box>
-          <Box borderStyle="single" borderColor={isRunning ? 'yellow' : 'green'} paddingX={1}>
+          <Box borderStyle="single" borderColor={isRunning ? theme.warning : theme.success} paddingX={1}>
             {isRunning ? (
-              <Text color="yellow">Agent is running…</Text>
+              <Text color={theme.warning}>Agent is running…</Text>
             ) : (
               <TextInput
                 value={inputValue}

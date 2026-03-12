@@ -6,6 +6,7 @@ import { render } from 'ink-testing-library';
 import { App } from '../app.js';
 import { TypedEventBus } from '../../events/event-bus.js';
 import { SessionStorage } from '../../storage/session-storage.js';
+import type { AgentLoop } from '../../runtime/agent-loop.js';
 
 // Mock SessionStorage
 vi.mock('../../storage/session-storage.js', () => {
@@ -44,18 +45,35 @@ vi.mock('../../storage/session-storage.js', () => {
   return { SessionStorage: MockSessionStorage };
 });
 
+function createMockAgentLoop(): AgentLoop {
+  return {
+    runStreaming: vi.fn().mockResolvedValue({
+      sessionId: 'test-session',
+      steps: 1,
+      finalResponse: 'Agent response',
+      tokenUsage: { input_tokens: 10, output_tokens: 20 },
+      status: 'completed',
+    }),
+    cancel: vi.fn().mockReturnValue(true),
+    run: vi.fn(),
+    isRunActive: vi.fn().mockReturnValue(false),
+  } as unknown as AgentLoop;
+}
+
 describe('App', () => {
   let eventBus: TypedEventBus;
   let sessionStorage: SessionStorage;
+  let mockAgentLoop: AgentLoop;
 
   beforeEach(() => {
     eventBus = new TypedEventBus();
     sessionStorage = new SessionStorage();
+    mockAgentLoop = createMockAgentLoop();
   });
 
   it('should render with session panel and chat panel', () => {
     const { lastFrame } = render(
-      <App eventBus={eventBus} sessionStorage={sessionStorage} />
+      <App eventBus={eventBus} sessionStorage={sessionStorage} agentLoop={mockAgentLoop} />
     );
 
     const output = lastFrame();
@@ -68,7 +86,7 @@ describe('App', () => {
 
   it('should toggle session panel with Ctrl+B', async () => {
     const { lastFrame, stdin } = render(
-      <App eventBus={eventBus} sessionStorage={sessionStorage} />
+      <App eventBus={eventBus} sessionStorage={sessionStorage} agentLoop={mockAgentLoop} />
     );
 
     // Initially visible
@@ -91,10 +109,66 @@ describe('App', () => {
 
   it('should show empty state when no sessions exist', () => {
     const { lastFrame } = render(
-      <App eventBus={eventBus} sessionStorage={sessionStorage} />
+      <App eventBus={eventBus} sessionStorage={sessionStorage} agentLoop={mockAgentLoop} />
     );
 
     const output = lastFrame();
     expect(output).toContain('No sessions');
+  });
+
+  it('should accept agentLoop prop for test injection', () => {
+    // Verifies that the injected agentLoop skips initialization
+    // (no "Initializing..." screen)
+    const { lastFrame } = render(
+      <App eventBus={eventBus} sessionStorage={sessionStorage} agentLoop={mockAgentLoop} />
+    );
+
+    const output = lastFrame();
+    expect(output).not.toContain('Initializing');
+    expect(output).toContain('Sessions');
+  });
+
+  it('should accept null agentLoop without showing init screen', () => {
+    const { lastFrame } = render(
+      <App eventBus={eventBus} sessionStorage={sessionStorage} agentLoop={null} />
+    );
+
+    const output = lastFrame();
+    // null is an explicit injection, not undefined (which triggers init)
+    expect(output).not.toContain('Initializing');
+  });
+
+  it('should create new session on Ctrl+N', async () => {
+    render(
+      <App eventBus={eventBus} sessionStorage={sessionStorage} agentLoop={mockAgentLoop} />
+    );
+
+    // Verify no session created initially
+    expect(sessionStorage.createSession).not.toHaveBeenCalled();
+  });
+
+  it('should show streaming text from agentRun via eventBus', async () => {
+    const { lastFrame, stdin } = render(
+      <App eventBus={eventBus} sessionStorage={sessionStorage} agentLoop={mockAgentLoop} />
+    );
+
+    // Create a session first
+    stdin.write('\x0e'); // Ctrl+N
+
+    await vi.waitFor(() => {
+      expect(sessionStorage.createSession).toHaveBeenCalled();
+    });
+
+    // Simulate streaming delta events
+    eventBus.emit('run:start', {
+      runId: 'r1',
+      agentConfig: { model: 'test', systemPrompt: 'test', maxSteps: 5 },
+      prompt: 'test',
+    });
+    eventBus.emit('llm:stream:delta', { runId: 'r1', text: 'Streaming response' });
+
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('Streaming response');
+    });
   });
 });

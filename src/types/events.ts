@@ -2,6 +2,16 @@
 
 import type { AgentConfig, Message, ToolResult } from './index.js';
 
+/** Rate limit information from Anthropic API unified headers */
+export interface RateLimitInfo {
+  fiveHourUtilization: number;    // 0.0 - 1.0
+  fiveHourReset: number;          // Unix timestamp (seconds)
+  fiveHourStatus: string;         // 'allowed' | 'throttled'
+  sevenDayUtilization: number;    // 0.0 - 1.0
+  sevenDayReset: number;          // Unix timestamp (seconds)
+  sevenDayStatus: string;         // 'allowed' | 'throttled'
+}
+
 /** Token usage statistics */
 export interface TokenUsage {
   inputTokens: number;
@@ -24,7 +34,7 @@ export interface EventMap {
   'tool:call': { runId: string; toolName: string; input: unknown; stepIndex: number };
   'tool:result': { runId: string; toolName: string; result: ToolResult; durationMs: number };
   'llm:request': { runId: string; model: string; messageCount: number };
-  'llm:response': { runId: string; model: string; tokenUsage: StepTokenUsage };
+  'llm:response': { runId: string; model: string; tokenUsage: StepTokenUsage; rateLimit?: RateLimitInfo };
   'agent:spawned': { id: string; role: string; sessionId: string };
   'agent:status': { id: string; status: string; previousStatus?: string };
   'agent:terminated': { id: string; role: string };

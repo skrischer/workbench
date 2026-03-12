@@ -8,6 +8,8 @@ export {
   isValidModel,
   FALLBACK_CHAIN,
   MODEL_COOLDOWN_MS,
+  MODEL_CONTEXT_WINDOWS,
+  getContextWindowSize,
 } from './models.js';
 
 export { resolveModelName } from './model-resolver.js';

@@ -96,7 +96,7 @@ function formatTimeUntilExpiry(expiresTimestamp: number): string {
   }
 }
 
-async function interactiveAuth(): Promise<void> {
+export async function interactiveAuth(): Promise<void> {
   console.log('OAuth PKCE Setup\n');
 
   const { verifier, challenge } = generatePKCE();

@@ -43,11 +43,9 @@ export function createWebCommand(): Command {
         eventBus,
       );
 
-      await createServer(
-        { eventBus, sessionStorage, agentLoop },
-        { host: options.host, port: options.port },
-      );
+      const { app } = await createServer({ eventBus, sessionStorage, agentLoop });
 
+      await app.listen({ host: options.host, port: options.port });
       console.log(`Workbench Web UI running at http://${options.host}:${options.port}`);
 
       if (options.open) {

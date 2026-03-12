@@ -57,3 +57,35 @@ export const FALLBACK_CHAIN = [
  * Models are unavailable for this duration after triggering a fallback
  */
 export const MODEL_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Model context window sizes (max input tokens)
+ */
+export const MODEL_CONTEXT_WINDOWS = new Map<string, number>([
+  ['claude-opus-4-20250514', 200_000],
+  ['claude-sonnet-4-20250514', 200_000],
+  ['claude-3-5-sonnet-20241022', 200_000],
+  ['claude-3-5-haiku-20241022', 200_000],
+]);
+
+/**
+ * Get context window size for a model
+ * @param model - Model identifier (full or alias)
+ * @returns Context window size in tokens, or undefined if unknown
+ */
+export function getContextWindowSize(model: string): number | undefined {
+  // Direct lookup
+  const direct = MODEL_CONTEXT_WINDOWS.get(model);
+  if (direct !== undefined) return direct;
+
+  // Try alias resolution
+  const resolved = MODEL_ALIASES.get(model);
+  if (resolved) return MODEL_CONTEXT_WINDOWS.get(resolved);
+
+  // Fuzzy match: check if model string contains a known model prefix
+  for (const [key, value] of MODEL_CONTEXT_WINDOWS) {
+    if (model.includes(key) || key.includes(model)) return value;
+  }
+
+  return undefined;
+}

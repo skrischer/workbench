@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
+import { theme } from '../theme.js';
 
 export interface ToolCallData {
   toolId: string;
@@ -48,7 +49,7 @@ export function ToolCallBlock({ data, isFocused = false }: ToolCallBlockProps): 
   );
 
   // Status color
-  const statusColor = data.isRunning ? 'yellow' : data.isError ? 'red' : 'green';
+  const statusColor = data.isRunning ? theme.warning : data.isError ? theme.destructive : theme.success;
 
   // Status icon
   const statusIcon = data.isRunning
@@ -82,7 +83,7 @@ export function ToolCallBlock({ data, isFocused = false }: ToolCallBlockProps): 
       {data.result !== undefined && (
         <Box marginTop={1} flexDirection="column">
           <Text dimColor bold>Output:</Text>
-          <Text color={data.isError ? 'red' : undefined} wrap="wrap">
+          <Text color={data.isError ? theme.destructive : undefined} wrap="wrap">
             {data.result}
           </Text>
         </Box>

@@ -3,6 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
+import { theme } from '../theme.js';
 
 export interface ChatInputProps {
   onSubmit: (value: string) => void;
@@ -30,14 +31,14 @@ export function ChatInput({ onSubmit, disabled = false, placeholder = 'Type a me
   if (disabled) {
     return (
       <Box paddingX={1}>
-        <Text color="yellow">Agent is running…</Text>
+        <Text color={theme.warning}>Agent is running…</Text>
       </Box>
     );
   }
 
   return (
     <Box paddingX={1}>
-      <Text color="green">&gt; </Text>
+      <Text color={theme.primary}>&gt; </Text>
       <TextInput
         value={value}
         onChange={setValue}

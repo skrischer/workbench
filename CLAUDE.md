@@ -97,6 +97,7 @@ Session-Summarizer kondensiert abgeschlossene Sessions via LLM. Embeddings werde
 - **Main branch**: `main`
 - **Worktree base**: `/tmp/workbench-worktrees`
 - **GitHub repo**: `skrischer/workbench`
+- **WICHTIG: Niemals direkt auf `develop` oder `main` arbeiten.** Alle Änderungen müssen in einem Git Worktree erfolgen. Vor jeder Code-Änderung einen Worktree erstellen (via `EnterWorktree` Tool oder `git worktree add`).
 
 ## Design System (Web UI)
 
@@ -112,6 +113,55 @@ Key decisions:
 - **Shared code**: `src/shared/` for stores, hooks, types (TUI + Web share logic, not components)
 
 Context-aware retrieval: When building a page, first check `design-system/pages/<page>.md`, then fall back to `design-system/MASTER.md`.
+
+## Web UI Dev Setup
+
+### Gateway (recommended — single process)
+
+The Gateway unifies Fastify (API + WebSocket) and Vite (HMR) into one process:
+
+```bash
+npm run build && workbench gateway --dev          # Fastify + Vite on :3000, HMR on :24678
+```
+
+**Architecture (Gateway Dev Mode):**
+```
+Browser
+  → http://localhost:3000           (Web UI with HMR)
+  → Fastify + Vite middleware       (one process)
+  → /ws  → WebSocket bridge
+  → HMR  → ws://localhost:24678
+```
+
+**Options:**
+```bash
+workbench gateway --dev                # Dev mode with Vite HMR
+workbench gateway --dev --port 8080    # Custom port
+workbench gateway --dev --host 0.0.0.0 # External access (e.g. via Tailscale)
+workbench gateway                      # Prod mode (serves dist/web static files)
+```
+
+### Legacy: Separate Vite + Fastify
+
+Still works for standalone Vite usage:
+
+```bash
+npm run dev:web          # Vite Dev Server on :5173 (proxies /ws → :3000)
+workbench web            # Fastify + WebSocket on :3000
+```
+
+### Tailscale HTTPS Proxy
+
+For external access via Tailscale, point the proxy at the Gateway:
+
+```bash
+tailscale serve --bg --set-path / --https 3333 http://127.0.0.1:3000
+```
+
+**Notes:**
+- Gateway `--host 0.0.0.0` required for Tailscale to reach the server
+- `allowedHosts` in `vite.config.ts` includes `srv1364794.tiffany-kelvin.ts.net`
+- React StrictMode double-mount causes a harmless "WebSocket closed before established" warning in dev — ignorable
 
 ## Reviewer Focus
 

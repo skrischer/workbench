@@ -179,6 +179,7 @@ export class AgentLoop {
             inputTokens: response.usage.input_tokens,
             outputTokens: response.usage.output_tokens,
           },
+          rateLimit: response.rateLimit,
         });
 
         // d. Save assistant response
@@ -462,12 +463,16 @@ export class AgentLoop {
         let currentToolId = '';
         let currentToolName = '';
         let currentToolInput = '';
+        let streamInputTokens = 0;
+        let streamOutputTokens = 0;
 
         for await (const delta of stream) {
-          if (delta.type === 'text_delta' && delta.text) {
+          if (delta.type === 'message_start') {
+            streamInputTokens = delta.inputTokens;
+          } else if (delta.type === 'text_delta') {
             textContent += delta.text;
             this.eventBus?.emit('llm:stream:delta', { runId, text: delta.text });
-          } else if (delta.type === 'tool_use_start' && delta.toolName && delta.toolId) {
+          } else if (delta.type === 'tool_use_start') {
             currentToolId = delta.toolId;
             currentToolName = delta.toolName;
             currentToolInput = '';
@@ -476,7 +481,7 @@ export class AgentLoop {
               toolName: delta.toolName,
               toolId: delta.toolId,
             });
-          } else if (delta.type === 'tool_input_delta' && delta.inputDelta) {
+          } else if (delta.type === 'tool_input_delta') {
             currentToolInput += delta.inputDelta;
             this.eventBus?.emit('llm:stream:tool_input', {
               runId,
@@ -501,10 +506,27 @@ export class AgentLoop {
               currentToolName = '';
               currentToolInput = '';
             }
+          } else if (delta.type === 'message_delta') {
+            streamOutputTokens = delta.outputTokens;
           } else if (delta.type === 'message_stop') {
             this.eventBus?.emit('llm:stream:stop', { runId });
           }
         }
+
+        // Accumulate token usage from stream
+        totalUsage.input_tokens += streamInputTokens;
+        totalUsage.output_tokens += streamOutputTokens;
+
+        // Emit llm:response event with streaming usage + rate limits
+        this.eventBus?.emit('llm:response', {
+          runId,
+          model: this.config.model ?? 'unknown',
+          tokenUsage: {
+            inputTokens: streamInputTokens,
+            outputTokens: streamOutputTokens,
+          },
+          rateLimit: stream.rateLimit,
+        });
 
         // Save assistant message
         const assistantMessage: AssistantMessage = {

@@ -60,7 +60,8 @@ async function executeCommand(
 ): Promise<unknown> {
   switch (command) {
     case 'list_sessions': {
-      return ctx.sessionStorage.list({ limit: 50, sort: 'desc' });
+      const result = await ctx.sessionStorage.list({ limit: 50, sort: 'desc' });
+      return result.data;
     }
 
     case 'load_session': {

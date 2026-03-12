@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { useStorageContext } from '../context.js';
+import { theme, statusColors } from '../theme.js';
 import type { SessionPreview } from '../types.js';
 import type { SessionStatus } from '../../types/index.js';
 
@@ -11,13 +12,6 @@ const STATUS_ICONS: Record<SessionStatus, string> = {
   completed: '○',
   paused: '⏸',
   failed: '✗',
-};
-
-const STATUS_COLORS: Record<SessionStatus, string> = {
-  active: 'green',
-  completed: 'gray',
-  paused: 'yellow',
-  failed: 'red',
 };
 
 export interface SessionPanelProps {
@@ -76,9 +70,9 @@ export function SessionPanel({ isFocused, activeSessionId, onSelectSession }: Se
   );
 
   return (
-    <Box flexDirection="column" borderStyle="single" borderColor={isFocused ? 'blue' : 'gray'} paddingX={1}>
+    <Box flexDirection="column" borderStyle="single" borderColor={isFocused ? theme.ring : theme.border} paddingX={1}>
       <Box marginBottom={1}>
-        <Text bold color="blue">Sessions</Text>
+        <Text bold color={theme.primary}>Sessions</Text>
       </Box>
       {sessions.length === 0 ? (
         <Text dimColor>No sessions yet</Text>
@@ -95,7 +89,7 @@ export function SessionPanel({ isFocused, activeSessionId, onSelectSession }: Se
           return (
             <Box key={session.id}>
               <Text
-                color={isActive ? 'green' : STATUS_COLORS[session.status]}
+                color={isActive ? theme.success : statusColors[session.status]}
                 inverse={isSelected && isFocused}
               >
                 {icon} {date} {session.id.slice(0, 8)}…

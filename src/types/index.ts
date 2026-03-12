@@ -168,6 +168,8 @@ export interface LLMConfig {
 export interface LLMUsage {
   input_tokens: number;
   output_tokens: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
 }
 
 /** Response from Anthropic Messages API */
@@ -179,6 +181,7 @@ export interface LLMResponse {
   model: string;
   stop_reason: 'end_turn' | 'max_tokens' | 'stop_sequence' | 'tool_use';
   usage: LLMUsage;
+  rateLimit?: import('./events.js').RateLimitInfo;
 }
 
 /** Result of an agent run */
@@ -217,7 +220,7 @@ export interface SessionSummary {
 }
 
 // Re-export event types
-export type { EventMap, EventListener, Unsubscribe, TokenUsage, StepTokenUsage } from './events.js';
+export type { EventMap, EventListener, Unsubscribe, TokenUsage, StepTokenUsage, RateLimitInfo } from './events.js';
 // Memory System Types
 export type {
   MemoryType,

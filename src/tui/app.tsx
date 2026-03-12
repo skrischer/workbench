@@ -1,9 +1,11 @@
 // src/tui/app.tsx — Root TUI component
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
+import { theme } from './theme.js';
 import { TypedEventBus } from '../events/event-bus.js';
 import { SessionStorage } from '../storage/session-storage.js';
+import type { AgentLoop } from '../runtime/agent-loop.js';
 import {
   EventBusContext,
   StorageContext,
@@ -14,34 +16,73 @@ import { SessionPanel } from './components/session-panel.js';
 import { ChatPanel } from './components/chat-panel.js';
 import { StatusBar } from './components/status-bar.js';
 import { executeSlashCommand, type CommandContext } from './commands.js';
+import { useAgentLoop } from './hooks/use-agent-loop.js';
+import { useAgentRun } from './hooks/use-agent-run.js';
 import type { ChatMessage } from './types.js';
 import type { Session } from '../types/index.js';
 
 export interface AppProps {
   eventBus?: TypedEventBus;
   sessionStorage?: SessionStorage;
+  agentLoop?: AgentLoop | null;
 }
 
-export function App({ eventBus: externalBus, sessionStorage: externalStorage }: AppProps): React.ReactElement {
+export function App({
+  eventBus: externalBus,
+  sessionStorage: externalStorage,
+  agentLoop: injectedAgentLoop,
+}: AppProps): React.ReactElement {
   const { exit } = useApp();
 
   // Infrastructure — use provided or create new
   const [eventBus] = useState(() => externalBus ?? new TypedEventBus());
   const [sessionStorage] = useState(() => externalStorage ?? new SessionStorage());
 
+  // AgentLoop — initialized async or injected for tests
+  const { agentLoop, isInitializing, initError } = useAgentLoop(
+    eventBus,
+    sessionStorage,
+    injectedAgentLoop
+  );
+
+  // Agent run state — wraps agentLoop + eventBus subscriptions
+  const agentRun = useAgentRun({ agentLoop, eventBus });
+
   // UI state
   const [showSessionPanel, setShowSessionPanel] = useState(true);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [streamingText, setStreamingText] = useState<string | undefined>(undefined);
   const [sessionPanelFocused, setSessionPanelFocused] = useState(false);
+  const [hasAnySessions, setHasAnySessions] = useState(true); // assume true until checked
 
-  // Runtime state
-  const [runtimeState, setRuntimeState] = useState<RuntimeState>({
+  // Auto-load the most recent session on startup
+  const startupLoaded = useRef(false);
+  useEffect(() => {
+    if (startupLoaded.current) return;
+    startupLoaded.current = true;
+
+    const loadLatest = async (): Promise<void> => {
+      try {
+        const result = await sessionStorage.list({ sort: 'desc', limit: 1 });
+        if (result.data.length > 0) {
+          setActiveSessionId(result.data[0].id);
+          setHasAnySessions(true);
+        } else {
+          setHasAnySessions(false);
+        }
+      } catch {
+        setHasAnySessions(false);
+      }
+    };
+    void loadLatest();
+  }, [sessionStorage]);
+
+  // Runtime state — derived from agentRun
+  const runtimeState: RuntimeState = {
     runId: null,
-    isRunning: false,
-    abort: () => {},
-  });
+    isRunning: agentRun.isRunning,
+    abort: agentRun.abort,
+  };
 
   // Load session messages when activeSessionId changes
   useEffect(() => {
@@ -67,6 +108,34 @@ export function App({ eventBus: externalBus, sessionStorage: externalStorage }: 
 
     void loadMessages();
   }, [activeSessionId, sessionStorage]);
+
+  // When agent run finishes: append assistant response
+  const lastResultRef = useRef(agentRun.lastResult);
+  useEffect(() => {
+    if (agentRun.lastResult && agentRun.lastResult !== lastResultRef.current && !agentRun.isRunning) {
+      lastResultRef.current = agentRun.lastResult;
+      const assistantMsg: ChatMessage = {
+        role: 'assistant',
+        content: agentRun.lastResult.finalResponse,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, assistantMsg]);
+    }
+  }, [agentRun.lastResult, agentRun.isRunning]);
+
+  // When agent run errors: append error message
+  const lastErrorRef = useRef(agentRun.error);
+  useEffect(() => {
+    if (agentRun.error && agentRun.error !== lastErrorRef.current) {
+      lastErrorRef.current = agentRun.error;
+      const errorMsg: ChatMessage = {
+        role: 'assistant',
+        content: `Error: ${agentRun.error}`,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    }
+  }, [agentRun.error]);
 
   // Create a new session helper
   const createNewSession = useCallback(async (): Promise<string> => {
@@ -100,7 +169,7 @@ export function App({ eventBus: externalBus, sessionStorage: externalStorage }: 
     },
   };
 
-  // Handle sending a message — with slash-command support
+  // Handle sending a message — with slash-command support + agent run
   const handleSendMessage = useCallback(
     (prompt: string) => {
       // Check for slash commands
@@ -115,8 +184,18 @@ export function App({ eventBus: externalBus, sessionStorage: externalStorage }: 
         timestamp: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, userMsg]);
+
+      // Start agent run — auto-create session if none active
+      const startRun = async (): Promise<void> => {
+        let sessionId = activeSessionId;
+        if (!sessionId) {
+          sessionId = await createNewSession();
+        }
+        agentRun.sendMessage(prompt, sessionId);
+      };
+      void startRun();
     },
-    [commandContext]
+    [commandContext, agentRun, activeSessionId, createNewSession]
   );
 
   // Handle session selection
@@ -148,7 +227,6 @@ export function App({ eventBus: externalBus, sessionStorage: externalStorage }: 
     // Ctrl+L — Clear chat visually
     if (key.ctrl && input === 'l') {
       setMessages([]);
-      setStreamingText(undefined);
       return;
     }
 
@@ -163,12 +241,29 @@ export function App({ eventBus: externalBus, sessionStorage: externalStorage }: 
           timestamp: new Date().toISOString(),
         };
         setMessages((prev) => [...prev, cancelMsg]);
-        setStreamingText(undefined);
       } else {
         exit();
       }
     }
   });
+
+  // Show initialization state
+  if (isInitializing) {
+    return (
+      <Box flexDirection="column" padding={1}>
+        <Text>Initializing agent...</Text>
+      </Box>
+    );
+  }
+
+  if (initError) {
+    return (
+      <Box flexDirection="column" padding={1}>
+        <Text color={theme.destructive}>Initialization failed: {initError}</Text>
+        <Text dimColor>Run &quot;workbench auth&quot; to set up authentication.</Text>
+      </Box>
+    );
+  }
 
   return (
     <EventBusContext.Provider value={eventBus}>
@@ -188,9 +283,10 @@ export function App({ eventBus: externalBus, sessionStorage: externalStorage }: 
               <Box width={showSessionPanel ? '80%' : '100%'}>
                 <ChatPanel
                   messages={messages}
-                  streamingText={streamingText}
+                  streamingText={agentRun.streamingText || undefined}
                   onSendMessage={handleSendMessage}
                   hasActiveSession={activeSessionId !== null}
+                  hasAnySessions={hasAnySessions}
                 />
               </Box>
             </Box>

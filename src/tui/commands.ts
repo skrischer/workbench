@@ -1,5 +1,8 @@
 // src/tui/commands.ts — Slash-commands for the TUI
 
+import { TokenStorage } from '../llm/token-storage.js';
+import { TokenRefresher } from '../llm/token-refresh.js';
+
 export interface CommandContext {
   createSession: () => Promise<string>;
   resumeSession: (sessionId: string) => void;
@@ -43,7 +46,66 @@ const helpCommand: SlashCommand = {
   },
 };
 
-export const COMMANDS: SlashCommand[] = [newCommand, resumeCommand, helpCommand];
+function formatTimeUntilExpiry(expiresTimestamp: number): string {
+  const msUntilExpiry = expiresTimestamp - Date.now();
+  if (msUntilExpiry < 0) return 'Expired';
+  const hours = Math.floor(msUntilExpiry / (1000 * 60 * 60));
+  const minutes = Math.floor((msUntilExpiry % (1000 * 60 * 60)) / (1000 * 60));
+  if (hours > 24) return `${Math.floor(hours / 24)} days`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+function maskToken(token: string): string {
+  if (token.length < 10) return '***';
+  const prefix = token.slice(0, token.indexOf('-', 10) + 1);
+  return `${prefix}***${token.slice(-3)}`;
+}
+
+const authCommand: SlashCommand = {
+  name: 'auth',
+  description: 'Token status & refresh. Usage: /auth [status|refresh]',
+  async execute(args: string[], context: CommandContext): Promise<void> {
+    const sub = args[0]?.toLowerCase() ?? 'status';
+    const storage = new TokenStorage();
+
+    if (sub === 'status') {
+      try {
+        const tokens = await storage.load();
+        const { anthropic } = tokens;
+        const expiry = formatTimeUntilExpiry(anthropic.expires);
+        const expired = Date.now() >= anthropic.expires;
+        context.setError(
+          `Auth: ${expired ? '✗ Expired' : '✓ Configured'}\n` +
+          `Token: ${maskToken(anthropic.access)}\n` +
+          `Expires in: ${expiry}`
+        );
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('not found')) {
+          context.setError('Auth: ✗ No tokens configured.\nRun "workbench auth" in a terminal to set up.');
+        } else {
+          context.setError(`Auth error: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    } else if (sub === 'refresh') {
+      try {
+        const refresher = new TokenRefresher(storage);
+        await refresher.ensureValidToken();
+        context.setError('Auth: ✓ Tokens refreshed successfully.');
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('not found')) {
+          context.setError('Auth: No tokens found. Run "workbench auth" to set up.');
+        } else {
+          context.setError(`Auth refresh failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    } else {
+      context.setError('Usage: /auth [status|refresh]');
+    }
+  },
+};
+
+export const COMMANDS: SlashCommand[] = [newCommand, resumeCommand, authCommand, helpCommand];
 
 /**
  * Parse and execute a slash command.

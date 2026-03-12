@@ -5,12 +5,7 @@ import { Box, Text } from 'ink';
 import { Markdown } from './markdown.js';
 import { ToolCallBlock, type ToolCallData } from './tool-call-block.js';
 import type { ChatMessage } from '../types.js';
-
-const ROLE_COLORS = {
-  user: 'green',
-  assistant: 'white',
-  tool: 'gray',
-} as const;
+import { roleColors, theme } from '../theme.js';
 
 const ROLE_LABELS = {
   user: 'You',
@@ -47,13 +42,13 @@ export function MessageList({ messages, streamingText, activeToolCalls }: Messag
 
         return (
           <Box key={`${msg.timestamp}-${index}`} flexDirection="column" marginBottom={1}>
-            <Text bold color={ROLE_COLORS[msg.role]}>
+            <Text bold color={roleColors[msg.role]}>
               {ROLE_LABELS[msg.role]}
             </Text>
             {msg.role === 'assistant' ? (
               <Markdown>{msg.content}</Markdown>
             ) : (
-              <Text color={ROLE_COLORS[msg.role]} wrap="wrap">
+              <Text color={roleColors[msg.role]} wrap="wrap">
                 {msg.content}
               </Text>
             )}
@@ -67,8 +62,8 @@ export function MessageList({ messages, streamingText, activeToolCalls }: Messag
       ))}
       {streamingText ? (
         <Box flexDirection="column" marginBottom={1}>
-          <Text bold color="white">Assistant</Text>
-          <Text wrap="wrap">{streamingText}<Text color="cyan">▌</Text></Text>
+          <Text bold color={theme.foreground}>Assistant</Text>
+          <Markdown>{streamingText + ' ▌'}</Markdown>
         </Box>
       ) : null}
     </Box>

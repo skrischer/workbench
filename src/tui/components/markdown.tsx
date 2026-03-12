@@ -10,9 +10,10 @@ function ensureMarkedConfigured(): void {
   if (markedConfigured) return;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const markedTerminal = require('marked-terminal');
-    const renderer = markedTerminal.default ?? markedTerminal;
-    marked.use(renderer());
+    const mt = require('marked-terminal');
+    // v7+: use named export markedTerminal(), not the default Renderer class
+    const factory = mt.markedTerminal ?? mt.default;
+    marked.use(factory());
   } catch {
     // Fallback: no terminal rendering in test/CI environments
   }

@@ -22,9 +22,11 @@ export interface ServerOptions {
   port?: number;
 }
 
-export async function createServer(deps: ServerDeps, options: ServerOptions = {}) {
-  const { host = '127.0.0.1', port = 3000 } = options;
-
+/**
+ * Create and configure the Fastify server with WebSocket, static files, and SPA fallback.
+ * Does NOT call listen() — the caller is responsible for starting the server.
+ */
+export async function createServer(deps: ServerDeps) {
   const app = Fastify({ logger: false });
 
   // Register WebSocket plugin
@@ -44,14 +46,13 @@ export async function createServer(deps: ServerDeps, options: ServerOptions = {}
     bridge.handleConnection(socket);
   });
 
+  // Health check
+  app.get('/health', async () => ({ status: 'ok' }));
+
   // SPA fallback — serve index.html for non-file routes
   app.setNotFoundHandler((_req, reply) => {
     return reply.sendFile('index.html', webDistDir);
   });
-
-  // Start server
-  await app.listen({ host, port });
-  console.log(`Workbench Web UI: http://${host}:${port}`);
 
   return {
     app,
