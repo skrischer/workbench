@@ -1,29 +1,9 @@
-// src/tui/types.ts — TUI-specific type definitions
+// src/tui/types.ts — TUI-specific type definitions (re-exports shared + TUI-only)
 
-import type { SessionStatus } from '../types/index.js';
+// Re-export shared types
+export type { SessionPreview, ChatMessage, ToolCallState } from '../shared/types/ui.js';
 
-/** Compact session preview for the session list */
-export interface SessionPreview {
-  id: string;
-  status: SessionStatus;
-  createdAt: string;
-  updatedAt: string;
-  messageCount: number;
-  promptPreview: string;
-}
-
-/** Chat message for display */
-export interface ChatMessage {
-  role: 'user' | 'assistant' | 'tool';
-  content: string;
-  toolCallId?: string;
-  toolName?: string;
-  toolInput?: Record<string, unknown>;
-  isStreaming?: boolean;
-  timestamp: string;
-}
-
-/** TUI application state */
+/** TUI application state (TUI-only, not shared) */
 export interface TUIState {
   activeSessionId: string | null;
   showSessionPanel: boolean;
