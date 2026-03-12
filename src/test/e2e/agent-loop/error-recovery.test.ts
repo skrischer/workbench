@@ -50,6 +50,7 @@ describe('E2E Agent Loop - Error Recovery', () => {
       await testEnv?.cleanup();
     });
 
+    // TODO Epic 27: Test duration 8-10s (CLI spawn + mock server + tool execution).
     it('should handle tool errors gracefully and send error as tool_result', async () => {
       const result = await runCli({
         args: ['run', 'read nonexistent-file.txt'],

@@ -1,7 +1,7 @@
 // src/tools/list-agents.ts — List Agents Tool
 
 import { BaseTool } from './base.js';
-import type { ToolResult } from '../types/index.js';
+import type { ToolResult, ToolContext } from '../types/index.js';
 import type { AgentRegistry } from '../multi-agent/agent-registry.js';
 import type { AgentRole, AgentStatus } from '../types/agent.js';
 
@@ -39,7 +39,7 @@ export class ListAgentsTool extends BaseTool {
     this.registry = registry;
   }
 
-  async execute(input: Record<string, unknown>): Promise<ToolResult> {
+  async execute(input: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     try {
       // Build filter from input
       const filter: { role?: AgentRole; status?: AgentStatus } = {};

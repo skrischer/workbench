@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { AgentInstance, SpawnConfig, AgentRole, AgentStatus } from '../types/agent.js';
 import { eventBus } from '../events/event-bus.js';
 import { validateSpawnConfig } from './validation.js';
+import { MODEL_CONSTANTS } from '../config/index.js';
 
 /**
  * AgentRegistry — Manages agent lifecycle (spawn, terminate, query, events).
@@ -56,11 +57,12 @@ export class AgentRegistry {
       name: config.name || `${config.role}-${id.slice(0, 8)}`,
       status: 'idle',
       config: {
-        model: config.model || 'claude-sonnet-4',
+        model: config.model || MODEL_CONSTANTS.LEGACY_SONNET_4,
         systemPrompt: config.systemPrompt || '',
         tools: config.tools,
         maxSteps: config.maxSteps || 10,
       },
+      parentId: config.parentId,
       sessionId,
       createdAt: new Date().toISOString(),
       metadata: {},

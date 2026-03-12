@@ -129,9 +129,23 @@ describe('RunLogger', () => {
     expect(loaded!.toolCalls[0].toolName).toBe('test_tool');
   });
 
-  it('should return null for non-existent run', async () => {
-    const loaded = await logger.loadRun('non-existent-run');
-    expect(loaded).toBeNull();
+  it('should throw NotFoundError for non-existent run', async () => {
+    const { isNotFoundError } = await import('../../types/errors.js');
+    
+    await expect(logger.loadRun('non-existent-run')).rejects.toThrow();
+    
+    try {
+      await logger.loadRun('non-existent-run');
+      expect.fail('Should have thrown NotFoundError');
+    } catch (error) {
+      expect(isNotFoundError(error)).toBe(true);
+      if (isNotFoundError(error)) {
+        expect(error.name).toBe('NotFoundError');
+        expect(error.resource).toBe('Run');
+        expect(error.id).toBe('non-existent-run');
+        expect(error.message).toBe('Run not found: non-existent-run');
+      }
+    }
   });
 
   it('should create pretty-printed JSON files', async () => {
@@ -177,9 +191,11 @@ describe('RunLogger', () => {
     logger.startRun('list-run-3', 'Third run');
     await logger.endRun('list-run-3', 'completed');
 
-    const runs = await logger.listRuns();
+    const result = await logger.listRuns();
+    const runs = result.data;
 
     expect(runs).toHaveLength(3);
+    expect(result.total).toBe(3);
     expect(runs.map(r => r.id).sort()).toEqual(['list-run-1', 'list-run-2', 'list-run-3']);
     
     const run1 = runs.find(r => r.id === 'list-run-1');
@@ -195,8 +211,9 @@ describe('RunLogger', () => {
     expect(run2!.status).toBe('failed');
   });
 
-  it('should return empty array when no runs directory exists', async () => {
-    const runs = await logger.listRuns();
-    expect(runs).toEqual([]);
+  it('should return empty result when no runs directory exists', async () => {
+    const result = await logger.listRuns();
+    expect(result.data).toEqual([]);
+    expect(result.total).toBe(0);
   });
 });

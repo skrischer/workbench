@@ -28,6 +28,7 @@ describe('E2E Agent Loop - Session Persistence', () => {
       await testEnv?.cleanup();
     });
 
+    // TODO Epic 27: Test duration 8-10s (CLI spawn + mock server + tool execution).
     it('should create a session file after workbench run', async () => {
       const result = await runCli({
         args: ['run', 'say hello'],
@@ -101,6 +102,7 @@ describe('E2E Agent Loop - Session Persistence', () => {
       await testEnv?.cleanup();
     });
 
+    // TODO Epic 27: Test duration 8-10s (CLI spawn + mock server + tool execution).
     it('should capture tool_use and tool_result in session messages', async () => {
       const result = await runCli({
         args: ['run', 'read a file'],

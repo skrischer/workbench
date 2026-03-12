@@ -42,7 +42,7 @@ describe('E2E Smoke Test', () => {
       expect(result.stdout).toContain('Hello! How can I help you today?');
     });
 
-    it('should use Authorization Bearer header, not x-api-key', async () => {
+    it('should use Authorization Bearer header with OAuth beta headers', async () => {
       const result = await runCli({
         args: ['run', 'test auth'],
         env: testEnv.env,
@@ -53,14 +53,20 @@ describe('E2E Smoke Test', () => {
       expect(mockServer.calls.length).toBeGreaterThanOrEqual(1);
 
       const firstCall = mockServer.calls[0];
-      const authHeader = firstCall.headers['authorization'];
+      const headers = firstCall.headers;
+      const authHeader = headers['authorization'];
+      const apiKeyHeader = headers['x-api-key'];
+      const betaHeader = headers['anthropic-beta'];
 
       // Must use Authorization: Bearer
       expect(authHeader).toBeDefined();
       expect(authHeader).toMatch(/^Bearer sk-ant-/);
 
       // Must NOT use x-api-key
-      expect(firstCall.headers['x-api-key']).toBeUndefined();
+      expect(apiKeyHeader).toBeUndefined();
+
+      // Must include OAuth beta header
+      expect(betaHeader).toBe('oauth-2025-04-20,claude-code-20250219');
     });
   });
 
@@ -74,8 +80,8 @@ describe('E2E Smoke Test', () => {
       expect(result.exitCode).toBe(0);
       expect(result.timedOut).toBe(false);
       expect(result.stdout).toContain('run');
-      expect(result.stdout).toContain('plan');
-      expect(result.stdout).toContain('dashboard');
+      expect(result.stdout).toContain('auth');
+      expect(result.stdout).toContain('config');
     });
 
     it('workbench run --help should show run options', async () => {
@@ -186,9 +192,15 @@ describe('E2E Smoke Test', () => {
         // Should not timeout/crash
         expect(result.timedOut).toBe(false);
 
-        // Should show rate limit message
+        // Should show rate limit message OR fallback exhausted message
+        // With new fallback handler, 429 triggers fallback chain
         const output = result.stderr + result.stdout;
-        expect(output.toLowerCase()).toMatch(/rate.*limit|too.*many.*request|429/);
+        const hasRateLimitIndicator = 
+          output.toLowerCase().includes('429') ||
+          output.toLowerCase().includes('rate limit') ||
+          output.toLowerCase().includes('too many request') ||
+          output.toLowerCase().includes('fallback');
+        expect(hasRateLimitIndicator).toBe(true);
       });
     });
   });

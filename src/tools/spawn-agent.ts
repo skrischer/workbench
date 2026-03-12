@@ -1,7 +1,7 @@
 // src/tools/spawn-agent.ts — Spawn Agent Tool
 
 import { BaseTool } from './base.js';
-import type { ToolResult } from '../types/index.js';
+import type { ToolResult, ToolContext } from '../types/index.js';
 import type { AgentRegistry } from '../multi-agent/agent-registry.js';
 import type { SpawnConfig } from '../types/agent.js';
 import { validateSpawnConfig } from '../multi-agent/validation.js';
@@ -61,8 +61,11 @@ export class SpawnAgentTool extends BaseTool {
     this.registry = registry;
   }
 
-  async execute(input: Record<string, unknown>): Promise<ToolResult> {
+  async execute(input: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     try {
+      // Extract parent agent ID from context (if available)
+      const parentId = context?.agentId;
+
       // Build config from input
       const config: SpawnConfig = {
         role: input.role as SpawnConfig['role'],
@@ -72,6 +75,7 @@ export class SpawnAgentTool extends BaseTool {
         tools: input.tools as string[] | undefined,
         maxSteps: input.maxSteps as number | undefined,
         cwd: input.cwd as string | undefined,
+        parentId,
       };
 
       // Privilege check: prevent spawning planner agents

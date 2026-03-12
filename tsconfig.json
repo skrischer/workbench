@@ -13,8 +13,10 @@
     "sourceMap": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "react"
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "src/dashboard/ui", "src/test/e2e/**/*.tsx"]
+  "exclude": ["node_modules", "dist"]
 }

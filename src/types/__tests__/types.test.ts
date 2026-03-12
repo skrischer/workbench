@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Agent, Tool, Session, Run, Task, Plan, Step } from '../index.js';
+import type { Agent, Session } from '../index.js';
 
 describe('Shared Types', () => {
   it('should create a valid Agent', () => {
@@ -26,27 +26,5 @@ describe('Shared Types', () => {
       updatedAt: new Date().toISOString(),
     };
     expect(session.status).toBe('active');
-  });
-
-  it('should create a valid Plan with Steps', () => {
-    const step: Step = {
-      id: 'step-1',
-      planId: 'plan-1',
-      title: 'First step',
-      description: 'Do something',
-      order: 1,
-      status: 'pending',
-    };
-    const plan: Plan = {
-      id: 'plan-1',
-      taskId: 'task-1',
-      title: 'Test Plan',
-      description: 'A test plan',
-      steps: [step],
-      status: 'draft',
-      createdAt: new Date().toISOString(),
-    };
-    expect(plan.steps).toHaveLength(1);
-    expect(plan.steps[0].order).toBe(1);
   });
 });

@@ -2,7 +2,7 @@
 
 import { readFile, writeFile } from 'node:fs/promises';
 import { BaseTool } from './base.js';
-import type { ToolResult } from '../types/index.js';
+import type { ToolResult, ToolContext } from '../types/index.js';
 
 /**
  * Tool for editing files by replacing exact string matches.
@@ -31,7 +31,7 @@ export class EditFileTool extends BaseTool {
     required: ['path', 'old_string', 'new_string'],
   };
 
-  async execute(input: Record<string, unknown>): Promise<ToolResult> {
+  async execute(input: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     const path = input.path as string;
     const oldString = input.old_string as string;
     const newString = input.new_string as string;

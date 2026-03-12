@@ -1,11 +1,8 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { runCommand } from './run-command.js';
-import { createPlanCommand } from './plan-command.js';
-import { createRunPlanCommand } from './run-plan-command.js';
-import { createPlansCommand } from './plans-command.js';
-import { createDashboardCommand } from './dashboard-command.js';
-import { createWorkflowCommands } from './workflow-commands.js';
+import { createAuthCommand } from './auth-command.js';
+import { createConfigCommand } from './config-command.js';
 
 const program = new Command();
 
@@ -28,21 +25,15 @@ program
   .option('--model <model>', 'Override LLM model')
   .option('--max-steps <n>', 'Override max steps', parseInt)
   .option('--config <path>', 'Path to agent config JSON file')
-  .action(async (prompt: string, options: { model?: string; maxSteps?: number; config?: string }) => {
+  .option('--no-summarize', 'Disable automatic session summarization')
+  .action(async (prompt: string, options: { model?: string; maxSteps?: number; config?: string; noSummarize?: boolean }) => {
     await runCommand(prompt, options);
   });
 
-// Register plan-related commands
-program.addCommand(createPlanCommand());
-program.addCommand(createRunPlanCommand());
-program.addCommand(createPlansCommand());
+// Register auth command
+program.addCommand(createAuthCommand());
 
-// Register dashboard command
-program.addCommand(createDashboardCommand());
-
-// Register workflow commands
-for (const cmd of createWorkflowCommands()) {
-  program.addCommand(cmd);
-}
+// Register config command
+program.addCommand(createConfigCommand());
 
 program.parse();

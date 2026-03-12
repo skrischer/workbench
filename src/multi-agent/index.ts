@@ -11,4 +11,3 @@ export type {
   SpawnConfig,
   AgentMessage,
 } from '../types/agent.js';
-export type { OrchestratorOptions, PlanExecutionResult } from './orchestrator.js';

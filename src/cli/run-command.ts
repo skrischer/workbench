@@ -6,12 +6,20 @@ import { loadAgentConfig } from '../agent/config.js';
 import { AnthropicClient } from '../llm/anthropic-client.js';
 import { TokenRefresher } from '../llm/token-refresh.js';
 import { TokenStorage } from '../llm/token-storage.js';
-import { CoreAgentLoop } from '../runtime/core-agent-loop.js';
+import { AgentLoop } from '../runtime/agent-loop.js';
 import { SessionStorage } from '../storage/session-storage.js';
+import { RunLogger } from '../storage/run-logger.js';
 import { createDefaultTools } from '../tools/defaults.js';
 import { ToolRegistry } from '../tools/registry.js';
 import { BaseTool } from '../tools/base.js';
-import type { AgentConfig, ToolResult } from '../types/index.js';
+import type { AgentConfig, ToolResult, Session, RunResult } from '../types/index.js';
+import type { AgentLoopHooks } from '../runtime/agent-loop.js';
+import { loadUserConfig } from '../config/user-config.js';
+import { LanceDBMemoryStore } from '../memory/lancedb-store.js';
+import { createAutoMemoryHook } from '../memory/auto-memory.js';
+import { AgentRegistry } from '../multi-agent/agent-registry.js';
+import { MessageBus } from '../multi-agent/message-bus.js';
+import { AgentOrchestrator } from '../multi-agent/orchestrator.js';
 
 /**
  * CLI run command options
@@ -20,6 +28,7 @@ export interface RunCommandOptions {
   model?: string;
   maxSteps?: number;
   config?: string;
+  noSummarize?: boolean;
 }
 
 /**
@@ -96,7 +105,18 @@ class LoggingToolRegistry extends ToolRegistry {
  */
 export async function runCommand(prompt: string, options: RunCommandOptions): Promise<void> {
   try {
-    // 1. Load agent config (with CLI overrides)
+    // 1. Create multi-agent infrastructure (needed for default tools)
+    const agentRegistry = new AgentRegistry();
+    const messageBus = new MessageBus();
+    
+    // 2. Create ToolRegistry early (needed for config validation)
+    // Note: memoryStore is added later after workbenchHome is configured
+    const baseRegistry = createDefaultTools({
+      agentRegistry,
+      messageBus,
+    });
+    
+    // 2. Load agent config (with CLI overrides)
     let agentConfig: AgentConfig;
     try {
       agentConfig = await loadAgentConfig(options.config);
@@ -108,13 +128,18 @@ export async function runCommand(prompt: string, options: RunCommandOptions): Pr
       if (options.maxSteps !== undefined) {
         agentConfig.maxSteps = options.maxSteps;
       }
+      
+      // ✅ CRITICAL: Ensure tools are populated
+      if (!agentConfig.tools || agentConfig.tools.length === 0) {
+        agentConfig.tools = baseRegistry.list();
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`❌ Failed to load agent config: ${message}`);
       process.exit(1);
     }
 
-    // 2. Create TokenStorage (default path: ~/.workbench/tokens.json)
+    // 3. Create TokenStorage (default path: ~/.workbench/tokens.json)
     const workbenchHome = process.env.WORKBENCH_HOME ?? path.join(homedir(), '.workbench');
     const tokenPath = path.join(workbenchHome, 'tokens.json');
     const tokenStorage = new TokenStorage(tokenPath);
@@ -142,22 +167,103 @@ export async function runCommand(prompt: string, options: RunCommandOptions): Pr
       apiUrl: process.env.ANTHROPIC_API_URL,
     });
 
-    // 5. Create ToolRegistry with default tools (wrapped with logging)
-    const baseRegistry = createDefaultTools();
+    // 5. Create LoggingToolRegistry wrapper (baseRegistry already created above)
     const toolRegistry = new LoggingToolRegistry(baseRegistry);
 
     // 6. Create SessionStorage
     const sessionStorage = new SessionStorage();
 
-    // 7. Create CoreAgentLoop
-    const agentLoop = new CoreAgentLoop(
+    // 6.5. Load UserConfig for auto-summarization
+    const userConfig = await loadUserConfig();
+
+    // 6.6. Create LanceDBMemoryStore for auto-memory
+    const memoryStore = new LanceDBMemoryStore({
+      dbPath: path.join(workbenchHome, 'memory'),
+    });
+    
+    // 6.7. Register memory tools now that store is available
+    const { RememberTool } = await import('../tools/remember.js');
+    const { RecallTool } = await import('../tools/recall.js');
+    baseRegistry.register(new RememberTool(memoryStore));
+    baseRegistry.register(new RecallTool(memoryStore));
+
+    // 6.8. Create AgentOrchestrator
+    const orchestrator = new AgentOrchestrator(
+      agentRegistry,
+      messageBus,
+      anthropicClient,
+      sessionStorage,
+      baseRegistry // Pass base registry (not the logging wrapper)
+    );
+
+    // 7. Create RunLogger and define hooks
+    const runLogger = new RunLogger(workbenchHome);
+    let currentStepIndex = 0;
+    
+    // Create auto-memory hook
+    const autoMemoryHook = createAutoMemoryHook({
+      sessionStorage,
+      runLogger,
+      memoryStore,
+      userConfig,
+      noSummarize: options.noSummarize,
+    });
+
+    const hooks: AgentLoopHooks = {
+      onBeforeRun: async (session: Session) => {
+        runLogger.startRun(session.id, prompt);
+      },
+      
+      onAfterStep: async (result: ToolResult, context: { runId: string; stepIndex: number; toolName: string }) => {
+        currentStepIndex = context.stepIndex;
+        
+        // Log the tool call
+        runLogger.logToolCall(
+          context.runId,
+          {
+            toolName: context.toolName,
+            input: {}, // Input was already logged by LoggingToolWrapper
+            output: result.output,
+            durationMs: 0, // Duration is tracked by event bus, not available here
+          },
+          context.stepIndex
+        );
+      },
+      
+      onAfterRun: async (result: RunResult, context: { runId: string }) => {
+        // 1. Complete run logging
+        const status: 'completed' | 'failed' | 'cancelled' = 
+          result.status === 'failed' ? 'failed' : 'completed';
+        
+        const tokenUsage = {
+          inputTokens: result.tokenUsage.input_tokens,
+          outputTokens: result.tokenUsage.output_tokens,
+          totalTokens: result.tokenUsage.input_tokens + result.tokenUsage.output_tokens,
+        };
+        
+        await runLogger.endRun(context.runId, status, tokenUsage);
+        
+        // 2. Auto-memory storage (if enabled)
+        if (autoMemoryHook) {
+          await autoMemoryHook(result, context);
+        }
+      },
+    };
+
+    // 8. Create AgentLoop with hooks and orchestrator
+    const agentLoop = new AgentLoop(
       anthropicClient,
       sessionStorage,
       toolRegistry,
-      agentConfig
+      agentConfig,
+      undefined, // eventBus
+      hooks,
+      undefined, // agentId (auto-generated)
+      agentRegistry,
+      orchestrator
     );
 
-    // 8. Run agent loop
+    // 9. Run agent loop
     console.error(`🚀 Starting agent with prompt: "${prompt}"`);
     console.error(`📋 Model: ${agentConfig.model}`);
     console.error(`🔧 Max steps: ${agentConfig.maxSteps}`);
@@ -165,7 +271,7 @@ export async function runCommand(prompt: string, options: RunCommandOptions): Pr
 
     const result = await agentLoop.run(prompt);
 
-    // 9. Output results
+    // 10. Output results
     // Final response goes to stdout (for programmatic use)
     console.log(result.finalResponse);
 

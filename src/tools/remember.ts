@@ -1,7 +1,7 @@
 // src/tools/remember.ts — Remember Tool for Memory Storage
 
 import { BaseTool } from './base.js';
-import type { ToolResult } from '../types/index.js';
+import type { ToolResult, ToolContext } from '../types/index.js';
 import type { LanceDBMemoryStore } from '../memory/lancedb-store.js';
 import type { MemoryType } from '../types/memory.js';
 
@@ -44,7 +44,7 @@ export class RememberTool extends BaseTool {
     this.memoryStore = memoryStore;
   }
 
-  async execute(input: Record<string, unknown>): Promise<ToolResult> {
+  async execute(input: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     const content = input.content as string;
     const type = (input.type as MemoryType | undefined) ?? 'knowledge';
     const tags = (input.tags as string[] | undefined) ?? [];

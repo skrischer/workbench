@@ -6,6 +6,9 @@ import { homedir } from 'node:os';
 import { existsSync } from 'node:fs';
 import type { RunLog, RunMetadata, RunMessage, RunToolCall, RunLogStatus } from '../types/run.js';
 import type { TokenUsage } from '../types/events.js';
+import type { StorageListOptions, StorageListResult } from '../types/index.js';
+import { createNotFoundError, isNotFoundError } from '../types/errors.js';
+import { normalizeListOptions } from '../types/index.js';
 
 export class RunLogger {
   private baseDir: string;
@@ -39,7 +42,7 @@ export class RunLogger {
   logStep(runId: string, message: { role: 'user' | 'assistant' | 'system' | 'tool'; content: string; toolCalls?: string[] }, stepIndex: number): void {
     const run = this.runs.get(runId);
     if (!run) {
-      throw new Error(`Run ${runId} not found`);
+      throw createNotFoundError('Run', runId);
     }
 
     const runMessage: RunMessage = {
@@ -58,7 +61,7 @@ export class RunLogger {
   logToolCall(runId: string, toolCall: { toolName: string; input: Record<string, unknown>; output: string; durationMs: number }, stepIndex: number): void {
     const run = this.runs.get(runId);
     if (!run) {
-      throw new Error(`Run ${runId} not found`);
+      throw createNotFoundError('Run', runId);
     }
 
     const runToolCall: RunToolCall = {
@@ -78,7 +81,7 @@ export class RunLogger {
   async endRun(runId: string, status: RunLogStatus, tokenUsage?: TokenUsage): Promise<void> {
     const run = this.runs.get(runId);
     if (!run) {
-      throw new Error(`Run ${runId} not found`);
+      throw createNotFoundError('Run', runId);
     }
 
     run.metadata.endedAt = new Date().toISOString();
@@ -97,7 +100,7 @@ export class RunLogger {
   private async flushToDisk(runId: string): Promise<void> {
     const run = this.runs.get(runId);
     if (!run) {
-      throw new Error(`Run ${runId} not found`);
+      throw createNotFoundError('Run', runId);
     }
 
     const runDir = join(this.baseDir, 'runs', runId);
@@ -118,14 +121,14 @@ export class RunLogger {
 
   /**
    * Load a run from disk
-   * Returns null if run doesn't exist
+   * @throws NotFoundError if run doesn't exist
    */
-  async loadRun(runId: string): Promise<RunLog | null> {
+  async loadRun(runId: string): Promise<RunLog> {
     const runDir = join(this.baseDir, 'runs', runId);
     const runJsonPath = join(runDir, 'run.json');
 
     if (!existsSync(runJsonPath)) {
-      return null;
+      throw createNotFoundError('Run', runId);
     }
 
     try {
@@ -146,15 +149,20 @@ export class RunLogger {
         toolCalls,
       };
     } catch (error) {
-      return null;
+      if (isNotFoundError(error)) {
+        throw error;
+      }
+      throw new Error(`Failed to load run ${runId}: ${error}`);
     }
   }
 
   /**
    * List all runs with metadata (no full message/tool-call load)
-   * @returns Array of run metadata
+   * @param options - Pagination options (offset, limit, sort)
+   * @returns Paginated result with run metadata
    */
-  async listRuns(): Promise<RunMetadata[]> {
+  async listRuns(options?: StorageListOptions): Promise<StorageListResult<RunMetadata>> {
+    const { offset, limit, sort } = normalizeListOptions(options);
     const { readdir } = await import('node:fs/promises');
     const runsDir = join(this.baseDir, 'runs');
 
@@ -184,19 +192,55 @@ export class RunLogger {
         })
       );
 
-      // Filter out nulls and return
-      return metadataList.filter(
+      // Filter out nulls
+      const validMetadata = metadataList.filter(
         (metadata): metadata is RunMetadata => metadata !== null
       );
+
+      // Sort by startedAt (or endedAt if available)
+      validMetadata.sort((a, b) => {
+        const dateA = new Date(a.startedAt).getTime();
+        const dateB = new Date(b.startedAt).getTime();
+        return sort === 'desc' ? dateB - dateA : dateA - dateB;
+      });
+
+      // Get total count
+      const total = validMetadata.length;
+
+      // Apply pagination
+      const data = validMetadata.slice(offset, offset + limit);
+
+      return { data, total, offset, limit };
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error) {
         const err = error as NodeJS.ErrnoException;
         if (err.code === 'ENOENT') {
-          // Runs directory doesn't exist yet, return empty list
-          return [];
+          // Runs directory doesn't exist yet, return empty result
+          return { data: [], total: 0, offset, limit };
         }
       }
       throw new Error(`Failed to list runs: ${error}`);
+    }
+  }
+
+  /**
+   * Update run metadata (e.g., add memoryId after summarization)
+   * @param runId - Run ID to update
+   * @param metadata - Updated metadata object
+   */
+  async updateRunMetadata(runId: string, metadata: RunMetadata): Promise<void> {
+    const runDir = join(this.baseDir, 'runs', runId);
+    const runJsonPath = join(runDir, 'run.json');
+
+    if (!existsSync(runJsonPath)) {
+      throw createNotFoundError('Run', runId);
+    }
+
+    try {
+      // Write updated metadata to run.json
+      await writeFile(runJsonPath, JSON.stringify(metadata, null, 2));
+    } catch (error) {
+      throw new Error(`Failed to update run metadata for ${runId}: ${error}`);
     }
   }
 }
