@@ -29,8 +29,8 @@ export async function runCli(options: CliRunnerOptions = {}): Promise<CliRunnerR
     cwd,
   } = options;
 
-  // Path to compiled CLI entry point (relative to project root)
-  const cliPath = path.resolve(import.meta.dirname, '../../dist/cli/index.js');
+  // Path to compiled TUI entry point (relative to project root)
+  const cliPath = path.resolve(import.meta.dirname, '../../dist/tui/index.js');
 
   return new Promise((resolve) => {
     const child = execFile(
