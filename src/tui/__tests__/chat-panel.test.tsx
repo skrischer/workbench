@@ -21,6 +21,7 @@ describe('ChatPanel', () => {
           messages={[]}
           onSendMessage={() => {}}
           hasActiveSession={false}
+          hasAnySessions={false}
         />
       </RuntimeContext.Provider>
     );

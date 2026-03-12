@@ -4,6 +4,7 @@ import React, { useState, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import { MessageList } from './message-list.js';
+import type { ToolCallData } from './tool-call-block.js';
 import { useRuntimeContext } from '../context.js';
 import type { ChatMessage } from '../types.js';
 import { theme } from '../theme.js';
@@ -11,12 +12,13 @@ import { theme } from '../theme.js';
 export interface ChatPanelProps {
   messages: ChatMessage[];
   streamingText?: string;
+  activeToolCalls?: ToolCallData[];
   onSendMessage: (prompt: string) => void;
   hasActiveSession: boolean;
   hasAnySessions?: boolean;
 }
 
-export function ChatPanel({ messages, streamingText, onSendMessage, hasActiveSession, hasAnySessions = true }: ChatPanelProps): React.ReactElement {
+export function ChatPanel({ messages, streamingText, activeToolCalls, onSendMessage, hasActiveSession, hasAnySessions = true }: ChatPanelProps): React.ReactElement {
   const [inputValue, setInputValue] = useState('');
   const { isRunning } = useRuntimeContext();
 
@@ -38,10 +40,10 @@ export function ChatPanel({ messages, streamingText, onSendMessage, hasActiveSes
         </Box>
       ) : (
         <>
-          <Box flexDirection="column" flexGrow={1} overflow="hidden">
-            <MessageList messages={messages} streamingText={streamingText} />
+          <Box flexDirection="column" flexGrow={1} flexShrink={1} overflow="hidden">
+            <MessageList messages={messages} streamingText={streamingText} activeToolCalls={activeToolCalls} />
           </Box>
-          <Box borderStyle="single" borderColor={isRunning ? theme.warning : theme.success} paddingX={1}>
+          <Box flexGrow={0} flexShrink={0} borderStyle="single" borderColor={isRunning ? theme.warning : theme.success} paddingX={1}>
             {isRunning ? (
               <Text color={theme.warning}>Agent is running…</Text>
             ) : (

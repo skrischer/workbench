@@ -153,10 +153,10 @@ export function App({
     },
     listSessions: async () => {
       const result = await sessionStorage.list({ sort: 'desc', limit: 20 });
-      return result.data.map((s: { id: string; status: string }) => ({
+      return result.data.map((s) => ({
         id: s.id,
         status: s.status,
-        promptPreview: '',
+        promptPreview: s.promptPreview,
       }));
     },
     setError: (msg: string) => {
@@ -270,9 +270,9 @@ export function App({
       <StorageContext.Provider value={sessionStorage}>
         <RuntimeContext.Provider value={runtimeState}>
           <Box flexDirection="column" width="100%" height="100%">
-            <Box flexDirection="row" flexGrow={1}>
+            <Box flexDirection="row" flexGrow={1} flexShrink={1} overflow="hidden">
               {showSessionPanel && (
-                <Box width="20%">
+                <Box width="20%" flexShrink={0}>
                   <SessionPanel
                     isFocused={sessionPanelFocused}
                     activeSessionId={activeSessionId}
@@ -280,10 +280,11 @@ export function App({
                   />
                 </Box>
               )}
-              <Box width={showSessionPanel ? '80%' : '100%'}>
+              <Box flexGrow={1} flexShrink={1}>
                 <ChatPanel
                   messages={messages}
                   streamingText={agentRun.streamingText || undefined}
+                  activeToolCalls={agentRun.activeToolCalls}
                   onSendMessage={handleSendMessage}
                   hasActiveSession={activeSessionId !== null}
                   hasAnySessions={hasAnySessions}

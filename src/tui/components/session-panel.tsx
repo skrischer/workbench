@@ -35,7 +35,7 @@ export function SessionPanel({ isFocused, activeSessionId, onSelectSession }: Se
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
         messageCount: s.messageCount,
-        promptPreview: s.id.slice(0, 8),
+        promptPreview: s.promptPreview || s.id.slice(0, 8),
       }));
       setSessions(previews);
     } catch {
@@ -70,7 +70,7 @@ export function SessionPanel({ isFocused, activeSessionId, onSelectSession }: Se
   );
 
   return (
-    <Box flexDirection="column" borderStyle="single" borderColor={isFocused ? theme.ring : theme.border} paddingX={1}>
+    <Box flexDirection="column" flexGrow={1} borderStyle="single" borderColor={isFocused ? theme.ring : theme.border} paddingX={1} overflow="hidden">
       <Box marginBottom={1}>
         <Text bold color={theme.primary}>Sessions</Text>
       </Box>
@@ -92,7 +92,7 @@ export function SessionPanel({ isFocused, activeSessionId, onSelectSession }: Se
                 color={isActive ? theme.success : statusColors[session.status]}
                 inverse={isSelected && isFocused}
               >
-                {icon} {date} {session.id.slice(0, 8)}…
+                {icon} {date} {session.promptPreview || session.id.slice(0, 8)}
               </Text>
             </Box>
           );

@@ -3,7 +3,7 @@
 import React, { createContext, useContext } from 'react';
 import type { TypedEventBus } from '../events/event-bus.js';
 import type { SessionStorage } from '../storage/session-storage.js';
-import type { ToolRegistry } from '../tools/registry.js';
+
 
 /** EventBus context */
 export const EventBusContext = createContext<TypedEventBus | null>(null);
@@ -23,9 +23,6 @@ export const RuntimeContext = createContext<RuntimeState>({
   isRunning: false,
   abort: () => {},
 });
-
-/** Tool registry context */
-export const ToolRegistryContext = createContext<ToolRegistry | null>(null);
 
 /** Hook to get the EventBus from context */
 export function useEventBusContext(): TypedEventBus {

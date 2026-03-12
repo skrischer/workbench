@@ -194,7 +194,7 @@ export class SessionStorage {
    * @param options - Pagination options (offset, limit, sort)
    * @returns Paginated result with session metadata
    */
-  async list(options?: StorageListOptions): Promise<StorageListResult<{ id: string; agentId: string; status: SessionStatus; createdAt: string; updatedAt: string; messageCount: number }>> {
+  async list(options?: StorageListOptions): Promise<StorageListResult<{ id: string; agentId: string; status: SessionStatus; createdAt: string; updatedAt: string; messageCount: number; promptPreview: string }>> {
     const { offset, limit, sort } = normalizeListOptions(options);
 
     try {
@@ -209,6 +209,10 @@ export class SessionStorage {
         sessionIds.map(async (id) => {
           try {
             const session = await this.load(id);
+            const firstUserMsg = session.messages.find((m) => m.role === 'user');
+            const preview = firstUserMsg
+              ? firstUserMsg.content.slice(0, 40) + (firstUserMsg.content.length > 40 ? '…' : '')
+              : '';
             return {
               id: session.id,
               agentId: session.agentId,
@@ -216,6 +220,7 @@ export class SessionStorage {
               createdAt: session.createdAt,
               updatedAt: session.updatedAt,
               messageCount: session.messages.length,
+              promptPreview: preview,
             };
           } catch {
             // Skip sessions that can't be loaded

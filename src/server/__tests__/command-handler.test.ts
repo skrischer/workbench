@@ -63,8 +63,9 @@ describe('handleCommand', () => {
 
   describe('list_sessions', () => {
     it('calls sessionStorage.list and sends result', async () => {
+      const sessionData = [{ id: 's1', agentId: 'a1', status: 'active', createdAt: '', updatedAt: '', messageCount: 0, promptPreview: '' }];
       const mockResult = {
-        data: [{ id: 's1', agentId: 'a1', status: 'active', createdAt: '', updatedAt: '', messageCount: 0 }],
+        data: sessionData,
         total: 1,
         offset: 0,
         limit: 50,
@@ -82,7 +83,7 @@ describe('handleCommand', () => {
       expect(response).toEqual({
         type: 'response',
         requestId: 'req-1',
-        data: mockResult,
+        data: sessionData,
       });
     });
   });
