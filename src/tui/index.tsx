@@ -2,8 +2,8 @@
 // src/tui/index.tsx — TUI Entry Point
 
 import { Command } from 'commander';
-import { createAuthCommand } from '../cli/auth-command.js';
-import { createConfigCommand } from '../cli/config-command.js';
+import { createAuthCommand } from './commands/auth-command.js';
+import { createConfigCommand } from './commands/config-command.js';
 
 const program = new Command();
 
@@ -29,7 +29,7 @@ program
   .option('--no-summarize', 'Disable automatic session summarization')
   .action(async (prompt: string, options: { model?: string; maxSteps?: number; config?: string; noSummarize?: boolean }) => {
     // In non-interactive mode (piped / no TTY), use the classic run command
-    const { runCommand } = await import('../cli/run-command.js');
+    const { runCommand } = await import('./commands/run-command.js');
     await runCommand(prompt, options);
   });
 

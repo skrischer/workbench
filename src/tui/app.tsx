@@ -1,7 +1,7 @@
 // src/tui/app.tsx — Root TUI component
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { Box, useInput, useApp } from 'ink';
+import { Box, Text, useInput, useApp } from 'ink';
 import { TypedEventBus } from '../events/event-bus.js';
 import { SessionStorage } from '../storage/session-storage.js';
 import {
@@ -12,6 +12,8 @@ import {
 } from './context.js';
 import { SessionPanel } from './components/session-panel.js';
 import { ChatPanel } from './components/chat-panel.js';
+import { StatusBar } from './components/status-bar.js';
+import { executeSlashCommand, type CommandContext } from './commands.js';
 import type { ChatMessage } from './types.js';
 import type { Session } from '../types/index.js';
 
@@ -66,9 +68,47 @@ export function App({ eventBus: externalBus, sessionStorage: externalStorage }: 
     void loadMessages();
   }, [activeSessionId, sessionStorage]);
 
-  // Handle sending a message (placeholder — real implementation in Wave 2)
+  // Create a new session helper
+  const createNewSession = useCallback(async (): Promise<string> => {
+    const session = await sessionStorage.createSession();
+    setActiveSessionId(session.id);
+    setMessages([]);
+    return session.id;
+  }, [sessionStorage]);
+
+  // Slash-command context
+  const commandContext: CommandContext = {
+    createSession: createNewSession,
+    resumeSession: (sessionId: string) => {
+      setActiveSessionId(sessionId);
+    },
+    listSessions: async () => {
+      const result = await sessionStorage.list({ sort: 'desc', limit: 20 });
+      return result.data.map((s: { id: string; status: string }) => ({
+        id: s.id,
+        status: s.status,
+        promptPreview: '',
+      }));
+    },
+    setError: (msg: string) => {
+      const sysMsg: ChatMessage = {
+        role: 'assistant',
+        content: msg,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, sysMsg]);
+    },
+  };
+
+  // Handle sending a message — with slash-command support
   const handleSendMessage = useCallback(
     (prompt: string) => {
+      // Check for slash commands
+      if (prompt.startsWith('/')) {
+        void executeSlashCommand(prompt, commandContext);
+        return;
+      }
+
       const userMsg: ChatMessage = {
         role: 'user',
         content: prompt,
@@ -76,7 +116,7 @@ export function App({ eventBus: externalBus, sessionStorage: externalStorage }: 
       };
       setMessages((prev) => [...prev, userMsg]);
     },
-    []
+    [commandContext]
   );
 
   // Handle session selection
@@ -95,12 +135,7 @@ export function App({ eventBus: externalBus, sessionStorage: externalStorage }: 
 
     // Ctrl+N — New session
     if (key.ctrl && input === 'n') {
-      const createNew = async (): Promise<void> => {
-        const session = await sessionStorage.createSession();
-        setActiveSessionId(session.id);
-        setMessages([]);
-      };
-      void createNew();
+      void createNewSession();
       return;
     }
 
@@ -121,6 +156,14 @@ export function App({ eventBus: externalBus, sessionStorage: externalStorage }: 
     if (key.ctrl && input === 'c') {
       if (runtimeState.isRunning) {
         runtimeState.abort();
+        // Feedback message
+        const cancelMsg: ChatMessage = {
+          role: 'assistant',
+          content: 'Run cancelled.',
+          timestamp: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, cancelMsg]);
+        setStreamingText(undefined);
       } else {
         exit();
       }
@@ -131,24 +174,27 @@ export function App({ eventBus: externalBus, sessionStorage: externalStorage }: 
     <EventBusContext.Provider value={eventBus}>
       <StorageContext.Provider value={sessionStorage}>
         <RuntimeContext.Provider value={runtimeState}>
-          <Box flexDirection="row" width="100%" height="100%">
-            {showSessionPanel && (
-              <Box width="20%">
-                <SessionPanel
-                  isFocused={sessionPanelFocused}
-                  activeSessionId={activeSessionId}
-                  onSelectSession={handleSelectSession}
+          <Box flexDirection="column" width="100%" height="100%">
+            <Box flexDirection="row" flexGrow={1}>
+              {showSessionPanel && (
+                <Box width="20%">
+                  <SessionPanel
+                    isFocused={sessionPanelFocused}
+                    activeSessionId={activeSessionId}
+                    onSelectSession={handleSelectSession}
+                  />
+                </Box>
+              )}
+              <Box width={showSessionPanel ? '80%' : '100%'}>
+                <ChatPanel
+                  messages={messages}
+                  streamingText={streamingText}
+                  onSendMessage={handleSendMessage}
+                  hasActiveSession={activeSessionId !== null}
                 />
               </Box>
-            )}
-            <Box width={showSessionPanel ? '80%' : '100%'}>
-              <ChatPanel
-                messages={messages}
-                streamingText={streamingText}
-                onSendMessage={handleSendMessage}
-                hasActiveSession={activeSessionId !== null}
-              />
             </Box>
+            <StatusBar eventBus={eventBus} isRunning={runtimeState.isRunning} />
           </Box>
         </RuntimeContext.Provider>
       </StorageContext.Provider>

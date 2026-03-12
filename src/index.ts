@@ -13,7 +13,7 @@ const isMainModule = import.meta.url === `file://${resolve(process.argv[1])}` ||
 
 if (isMainModule) {
   // Dynamically import CLI to avoid side effects when used as library
-  import('./cli/index.js').catch((error: unknown) => {
+  import('./tui/index.js').catch((error: unknown) => {
     console.error('Failed to start CLI:', error);
     process.exit(1);
   });
