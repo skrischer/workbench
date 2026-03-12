@@ -13,6 +13,7 @@
     "test:e2e": "vitest run --config vitest.config.e2e.ts",
     "dev": "tsc --watch",
     "dev:tui": "tsx watch src/tui/index.tsx",
+    "dev:gateway": "tsx watch --ignore 'src/web/**' src/gateway/entry.ts -- --dev",
     "check": "tsc --noEmit",
     "dev:web": "vite --config src/web/vite.config.ts",
     "build:web": "vite build --config src/web/vite.config.ts"
