@@ -13,6 +13,7 @@ function createMockStorage(sessions: Array<{
   createdAt: string;
   updatedAt: string;
   messageCount: number;
+  promptPreview?: string;
 }>): SessionStorage {
   return {
     list: vi.fn().mockResolvedValue({
@@ -54,6 +55,7 @@ describe('SessionPanel', () => {
         createdAt: '2026-03-10T10:00:00Z',
         updatedAt: '2026-03-10T10:00:00Z',
         messageCount: 5,
+        promptPreview: 'Explain the architecture',
       },
       {
         id: 'bbbbbbbb-1111-2222-3333-444444444444',
@@ -61,6 +63,7 @@ describe('SessionPanel', () => {
         createdAt: '2026-03-09T10:00:00Z',
         updatedAt: '2026-03-09T10:00:00Z',
         messageCount: 3,
+        promptPreview: 'Fix the login bug',
       },
     ];
     const storage = createMockStorage(sessions);
@@ -75,8 +78,8 @@ describe('SessionPanel', () => {
       const output = lastFrame();
       expect(output).toContain('●'); // active icon
       expect(output).toContain('○'); // completed icon
-      expect(output).toContain('aaaaaaaa');
-      expect(output).toContain('bbbbbbbb');
+      expect(output).toContain('Explain the architecture');
+      expect(output).toContain('Fix the login bug');
     });
   });
 
@@ -88,6 +91,7 @@ describe('SessionPanel', () => {
         createdAt: '2026-03-10T10:00:00Z',
         updatedAt: '2026-03-10T10:00:00Z',
         messageCount: 5,
+        promptPreview: 'Test session prompt',
       },
     ];
     const storage = createMockStorage(sessions);
@@ -101,7 +105,7 @@ describe('SessionPanel', () => {
 
     // Wait for sessions to load and render
     await vi.waitFor(() => {
-      expect(lastFrame()).toContain('aaaaaaaa');
+      expect(lastFrame()).toContain('Test session prompt');
     });
 
     // Press Enter to select
