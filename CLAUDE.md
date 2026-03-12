@@ -98,6 +98,21 @@ Session-Summarizer kondensiert abgeschlossene Sessions via LLM. Embeddings werde
 - **Worktree base**: `/tmp/workbench-worktrees`
 - **GitHub repo**: `skrischer/workbench`
 
+## Design System (Web UI)
+
+All Web UI work must follow `design-system/MASTER.md`. Page-specific overrides in `design-system/pages/<page>.md` take precedence.
+
+Key decisions:
+- **Style**: Modern Terminal (Dark-only, OLED-optimized)
+- **Colors**: Electric Blue accent (#3B82F6), Slate-based dark backgrounds
+- **Typography**: JetBrains Mono (headings/code/data) + IBM Plex Sans (body/UI)
+- **Border radius**: 4px default
+- **Mobile nav**: Bottom nav + drawer
+- **Icons**: Lucide React (no emojis as functional icons)
+- **Shared code**: `src/shared/` for stores, hooks, types (TUI + Web share logic, not components)
+
+Context-aware retrieval: When building a page, first check `design-system/pages/<page>.md`, then fall back to `design-system/MASTER.md`.
+
 ## Reviewer Focus
 
 - TypeScript strict compliance
