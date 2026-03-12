@@ -8,7 +8,7 @@ import path from 'node:path';
 describe('cli-runner', () => {
   beforeAll(() => {
     // Ensure dist/cli/index.js exists before running tests
-    const cliPath = path.resolve(import.meta.dirname, '../../../dist/cli/index.js');
+    const cliPath = path.resolve(import.meta.dirname, '../../../dist/tui/index.js');
     if (!fs.existsSync(cliPath)) {
       throw new Error(
         `CLI binary not found at ${cliPath}. Run 'npm run build' before running tests.`
