@@ -4,6 +4,7 @@
 import { Command } from 'commander';
 import { createAuthCommand } from './commands/auth-command.js';
 import { createConfigCommand } from './commands/config-command.js';
+import { createWebCommand } from '../cli/web-command.js';
 
 const program = new Command();
 
@@ -39,9 +40,12 @@ program.addCommand(createAuthCommand());
 // Register config command
 program.addCommand(createConfigCommand());
 
+// Register web command
+program.addCommand(createWebCommand());
+
 // Check if a subcommand was provided
 const args = process.argv.slice(2);
-const subcommands = ['status', 'run', 'auth', 'config', '--help', '-h', '--version', '-V'];
+const subcommands = ['status', 'run', 'auth', 'config', 'web', '--help', '-h', '--version', '-V'];
 const hasSubcommand = args.length > 0 && subcommands.some((cmd) => args[0] === cmd);
 
 if (hasSubcommand || !process.stdout.isTTY) {

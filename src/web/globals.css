@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+@theme {
+  /* Background */
+  --color-background: #0F172A;
+  --color-background-deep: #020617;
+  --color-background-elevated: #1E293B;
+
+  /* Surfaces */
+  --color-card: #1E293B;
+  --color-muted: #272F42;
+
+  /* Primary */
+  --color-primary: #3B82F6;
+  --color-primary-hover: #2563EB;
+  --color-primary-glow: rgba(59, 130, 246, 0.15);
+
+  /* Semantic */
+  --color-success: #22C55E;
+  --color-destructive: #EF4444;
+  --color-warning: #F59E0B;
+  --color-info: #06B6D4;
+
+  /* Text */
+  --color-foreground: #F8FAFC;
+  --color-foreground-secondary: #CBD5E1;
+  --color-foreground-muted: #64748B;
+
+  /* Borders */
+  --color-border: #334155;
+  --color-border-subtle: #1E293B;
+
+  /* Code */
+  --color-code-background: #0D1117;
+
+  /* Typography */
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-sans: 'IBM Plex Sans', 'Inter', system-ui, sans-serif;
+
+  /* Border Radius */
+  --radius-none: 0px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-full: 9999px;
+
+  /* Spacing (4px base) */
+  --spacing-0: 0px;
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 20px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-10: 40px;
+  --spacing-12: 48px;
+
+  /* Transitions */
+  --duration-fast: 100ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+
+  /* Z-Index */
+  --z-base: 0;
+  --z-sticky: 10;
+  --z-dropdown: 20;
+  --z-drawer: 30;
+  --z-modal: 40;
+  --z-toast: 50;
+  --z-command-palette: 100;
+}
+
+/* Base styles */
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-foreground-muted);
+}

@@ -245,3 +245,18 @@ export { normalizeListOptions } from './storage.js';
 // User Configuration Types
 export type { UserConfig } from '../config/user-config.js';
 export { DEFAULT_USER_CONFIG, loadUserConfig, saveUserConfig, getConfigValue, setConfigValue } from '../config/user-config.js';
+// WebSocket Protocol Types
+export type {
+  WsEventMessage,
+  WsResponseMessage,
+  ServerMessage,
+  WsCommand,
+  WsCommandMessage,
+  ClientMessage,
+  LoadSessionPayload,
+  SendMessagePayload,
+  AbortRunPayload,
+  SearchSessionsPayload,
+  CommandPayloadMap,
+} from './ws-protocol.js';
+export { isWsCommandMessage, isServerMessage } from './ws-protocol.js';
