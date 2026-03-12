@@ -170,11 +170,12 @@ describe('ChatPanel', () => {
       render(<ChatPanel />);
 
       const userBubble = screen.getByText('User msg').closest('div[class]')!;
-      const assistantBubble = screen
-        .getByText('Assistant msg')
-        .closest('div[class]')!;
+      // Assistant message is wrapped in MarkdownRenderer, find the bubble container
+      const assistantText = screen.getByText('Assistant msg');
+      const assistantBubble = assistantText.closest('.bg-card')!;
 
       expect(userBubble.className).toContain('bg-primary');
+      expect(assistantBubble).not.toBeNull();
       expect(assistantBubble.className).toContain('bg-card');
     });
 

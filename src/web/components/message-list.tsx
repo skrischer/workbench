@@ -1,28 +1,30 @@
-// src/web/components/message-list.tsx — Scrollable message list
-import { useEffect, useRef, useState, useCallback } from 'react';
+// src/web/components/message-list.tsx — Scrollable message list with markdown + tool blocks
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { ArrowDown } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area.js';
 import { Button } from './ui/button.js';
+import { MarkdownRenderer } from './markdown-renderer.js';
+import { ToolCallBlock } from './tool-call-block.js';
 import { useChatStore, useRunStore } from '../stores.js';
-import type { ChatMessage } from '../../shared/types/ui.js';
+import type { ChatMessage, ToolCallState } from '../../shared/types/ui.js';
 
-interface MessageBubbleProps {
-  message: ChatMessage;
+// === Message Bubbles ===
+
+function UserBubble({ message }: { message: ChatMessage }) {
+  return (
+    <div className="flex justify-end mb-3">
+      <div className="max-w-[85%] md:max-w-[75%] rounded-md px-4 py-2.5 text-sm font-sans whitespace-pre-wrap break-words bg-primary text-white">
+        {message.content}
+      </div>
+    </div>
+  );
 }
 
-function MessageBubble({ message }: MessageBubbleProps) {
-  const isUser = message.role === 'user';
-
+function AssistantBubble({ message }: { message: ChatMessage }) {
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
-      <div
-        className={`max-w-[85%] md:max-w-[75%] rounded-md px-4 py-2.5 text-sm font-sans whitespace-pre-wrap break-words ${
-          isUser
-            ? 'bg-primary text-white'
-            : 'bg-card text-foreground'
-        }`}
-      >
-        {message.content}
+    <div className="flex justify-start mb-3">
+      <div className="max-w-[85%] md:max-w-[75%] rounded-md px-4 py-2.5 bg-card text-foreground">
+        <MarkdownRenderer content={message.content} />
       </div>
     </div>
   );
@@ -33,13 +35,56 @@ function StreamingBubble({ text }: { text: string }) {
 
   return (
     <div className="flex justify-start mb-3">
-      <div className="max-w-[85%] md:max-w-[75%] rounded-md px-4 py-2.5 text-sm font-sans whitespace-pre-wrap break-words bg-card text-foreground">
-        {text}
-        <span className="inline-block w-[2px] h-[1em] bg-foreground ml-0.5 align-middle animate-cursor-blink" />
+      <div className="max-w-[85%] md:max-w-[75%] rounded-md px-4 py-2.5 bg-card text-foreground">
+        <MarkdownRenderer content={text} isStreaming />
       </div>
     </div>
   );
 }
+
+function MessageBubble({ message }: { message: ChatMessage }) {
+  if (message.role === 'user') {
+    return <UserBubble message={message} />;
+  }
+  return <AssistantBubble message={message} />;
+}
+
+// === Streaming Tool Calls ===
+
+function StreamingToolCalls({ toolCalls }: { toolCalls: Map<string, ToolCallState> }) {
+  const entries = useMemo(() => Array.from(toolCalls.values()), [toolCalls]);
+  if (entries.length === 0) return null;
+
+  return (
+    <div className="mb-3 max-w-[85%] md:max-w-[75%]">
+      {entries.map((tc) => (
+        <ToolCallBlock key={tc.toolId} toolCall={tc} />
+      ))}
+    </div>
+  );
+}
+
+// === Inline Tool Calls from Message History ===
+
+function InlineToolCallBlock({ message }: { message: ChatMessage }) {
+  if (message.role !== 'tool' || !message.toolName) return null;
+
+  const toolCall: ToolCallState = {
+    toolId: message.toolCallId ?? '',
+    toolName: message.toolName,
+    input: message.toolInput ? JSON.stringify(message.toolInput) : '',
+    result: message.content,
+    status: 'success',
+  };
+
+  return (
+    <div className="mb-3 max-w-[85%] md:max-w-[75%]">
+      <ToolCallBlock toolCall={toolCall} />
+    </div>
+  );
+}
+
+// === Message List ===
 
 interface MessageListProps {
   sessionId: string;
@@ -48,6 +93,7 @@ interface MessageListProps {
 export function MessageList({ sessionId }: MessageListProps) {
   const messages = useChatStore((s) => s.messages.get(sessionId) ?? []);
   const streamingText = useChatStore((s) => s.streamingText);
+  const streamingToolCalls = useChatStore((s) => s.streamingToolCalls);
   const isRunning = useRunStore((s) => s.isRunning);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -93,10 +139,23 @@ export function MessageList({ sessionId }: MessageListProps) {
         onScroll={handleScroll}
       >
         <div className="max-w-4xl mx-auto px-4 py-4">
-          {messages.map((msg, i) => (
-            <MessageBubble key={`${msg.timestamp}-${i}`} message={msg} />
-          ))}
+          {messages.map((msg, i) =>
+            msg.role === 'tool' ? (
+              <InlineToolCallBlock
+                key={`${msg.timestamp}-${i}`}
+                message={msg}
+              />
+            ) : (
+              <MessageBubble key={`${msg.timestamp}-${i}`} message={msg} />
+            ),
+          )}
 
+          {/* Streaming tool calls (active) */}
+          {isRunning && streamingToolCalls.size > 0 && (
+            <StreamingToolCalls toolCalls={streamingToolCalls} />
+          )}
+
+          {/* Streaming text */}
           {isRunning && streamingText && (
             <StreamingBubble text={streamingText} />
           )}

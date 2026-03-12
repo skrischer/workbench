@@ -6,6 +6,7 @@ import { BottomNav } from './components/bottom-nav.js';
 import { SessionDrawer } from './components/session-drawer.js';
 import { SessionPanel } from './components/session-panel.js';
 import { ChatPanel } from './components/chat-panel.js';
+import { StatusBar } from './components/status-bar.js';
 import { uiStore, chatStore, runStore, useUIStore } from './stores.js';
 import { PanelLeft } from 'lucide-react';
 
@@ -119,6 +120,9 @@ function AppShell() {
         <Sidebar />
         <MainContent />
       </div>
+
+      {/* Status Bar */}
+      <StatusBar />
 
       {/* Mobile Bottom Nav */}
       <BottomNav activeView={activeView} onViewChange={setActiveView} />
