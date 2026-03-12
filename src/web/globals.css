@@ -96,3 +96,34 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background-color: var(--color-foreground-muted);
 }
+
+/* Drawer slide-in animation */
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in-left 250ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Streaming cursor blink */
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.animate-cursor-blink {
+  animation: cursor-blink 500ms step-end infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-cursor-blink {
+    animation: none;
+    opacity: 1;
+  }
+}
