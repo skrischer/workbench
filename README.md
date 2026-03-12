@@ -1,88 +1,86 @@
 # Workbench
 
-**AI Dev OS** — ein CLI-basiertes Entwicklungssystem mit LLM-gestützten Agenten
+**AI Dev OS** — ein CLI-basiertes Entwicklungssystem mit LLM-gestützten Agenten.
+
+Single-User, läuft auf einem VPS. Der Agent ist ein kontrollierter Operator innerhalb einer deterministischen Loop — kein autonomes System.
 
 ## Tech Stack
 
-- **TypeScript** (strict mode)
+- **TypeScript** (strict mode, ESM)
 - **Node.js 22+**
-- **Commander.js** (CLI framework)
-- **Fastify** (planned, web interface)
+- **Commander.js** (CLI)
+- **LanceDB** (Vector-basiertes Memory)
+- **Anthropic API** (LLM Provider)
 
 ## Projektstruktur
 
 ```
 src/
-├── agents/       # Agent definitions and orchestration
-├── cli/          # Command-line interface
-├── dashboard/    # Dashboard components (planned)
-├── events/       # Event system
-├── git/          # Git integration
-├── llm/          # LLM provider integrations
-├── memory/       # Memory and context management
-├── runtime/      # Runtime and execution engine
-├── storage/      # Persistence layer
-├── tasks/        # Task management
-├── tools/        # Agent tools
-├── types/        # TypeScript type definitions
-└── workflows/    # Workflow definitions
+├── agent/        # Agent-Konfiguration (Model, Prompt, Tools, MaxSteps)
+├── cli/          # CLI-Kommandos (run, auth, config, status)
+├── config/       # Konfiguration (Models, User-Config)
+├── events/       # TypedEventBus — type-safe Pub/Sub
+├── git/          # Worktree-Isolation, Auto-Commit, Branch Guards
+├── llm/          # Anthropic Client, Token-Management, Fallback
+├── memory/       # Session-Summarizer, LanceDB Embeddings, Semantic Search
+├── multi-agent/  # Orchestrator/Worker Pattern, AgentRegistry, MessageBus
+├── runtime/      # Agent Loop, Lifecycle Hooks, Token Tracking
+├── storage/      # Session- & Run-Persistenz
+├── tools/        # File-Ops, Exec, Grep, Memory, Spawn-Agent u.a.
+└── types/        # Shared TypeScript Types
 ```
 
 ## Setup
 
 ```bash
-npm install
+pnpm install
 npm run build
 ```
 
 ## CLI Usage
 
-### Workflow Commands
-
 ```bash
-# Fix failing tests (auto-detect and repair)
-workbench fix-tests [--filter <pattern>] [--max-attempts <n>]
+# Agent mit Prompt ausführen
+workbench run "Fix the failing tests in src/utils"
 
-# Review code changes in a branch
-workbench review <branch> [--base <branch>] [--focus <area>]
+# Mit Optionen
+workbench run "Refactor auth module" --model claude-sonnet-4-20250514 --max-steps 15
 
-# Perform code refactoring
-workbench refactor <target> --type <type> [--dry-run] [--description <desc>]
+# Ohne automatische Session-Zusammenfassung
+workbench run "Quick fix" --no-summarize
 
-# Generate or update documentation
-workbench docs --type <type> [--target <path>] [--style <style>] [--update]
+# Status anzeigen
+workbench status
 
-# List available workflows
-workbench workflows
+# Authentifizierung
+workbench auth
 
-# Run a specific workflow by ID
-workbench workflow run <workflow-id> [--params <json>]
-
-# Execute a chain of workflows
-workbench chain <workflow-ids> [--cwd <path>] [--params <json>]
+# Konfiguration
+workbench config
 ```
 
-### Examples
+## Development
 
 ```bash
-# Fix tests with maximum 3 attempts
-workbench fix-tests --max-attempts 3
+# Build
+npm run build
 
-# Fix only tests matching pattern "auth"
-workbench fix-tests --filter "auth" --max-attempts 5
+# Type-Check
+npm run check
 
-# Review PR branch with security focus
-workbench review feature/new-api --base main --focus security
+# Tests
+npm test
 
-# Refactor: extract method
-workbench refactor src/utils.ts --type extract-method --description "Extract validation logic"
+# E2E Tests
+npm run test:e2e
 
-# Generate API documentation
-workbench docs --type api --target src/api --style detailed
+# Watch Mode
+npm run dev
+npm run test:watch
 ```
 
 ## Status
 
-**Phase 0 — Bootstrap**
+**Phase 1 — Core Runtime**
 
-Core infrastructure setup and initial agent framework.
+Agent-Laufzeit, Tool-System, Memory, Multi-Agent Orchestration, Git-Integration.

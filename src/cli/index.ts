@@ -1,14 +1,8 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { runCommand } from './run-command.js';
-import { createPlanCommand } from './plan-command.js';
-import { createRunPlanCommand } from './run-plan-command.js';
-import { createPlansCommand } from './plans-command.js';
-import { createDashboardCommand } from './dashboard-command.js';
-import { createWorkflowCommands } from './workflow-commands.js';
 import { createAuthCommand } from './auth-command.js';
 import { createConfigCommand } from './config-command.js';
-import { createCleanupCommand } from './cleanup-command.js';
 
 const program = new Command();
 
@@ -36,26 +30,10 @@ program
     await runCommand(prompt, options);
   });
 
-// Register plan-related commands
-program.addCommand(createPlanCommand());
-program.addCommand(createRunPlanCommand());
-program.addCommand(createPlansCommand());
-
-// Register dashboard command
-program.addCommand(createDashboardCommand());
-
 // Register auth command
 program.addCommand(createAuthCommand());
 
 // Register config command
 program.addCommand(createConfigCommand());
-
-// Register cleanup command
-program.addCommand(createCleanupCommand());
-
-// Register workflow commands
-for (const cmd of createWorkflowCommands()) {
-  program.addCommand(cmd);
-}
 
 program.parse();

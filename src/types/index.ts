@@ -109,40 +109,6 @@ export interface Run {
   completedAt?: string;
 }
 
-/** Task — structured task description */
-export interface Task {
-  id: string;
-  title: string;
-  description: string;
-  status: 'todo' | 'in-progress' | 'done' | 'blocked';
-  assignedTo?: string;
-  planId?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/** Step — atomic execution unit */
-export interface Step {
-  id: string;
-  planId: string;
-  title: string;
-  description: string;
-  order: number;
-  status: 'pending' | 'running' | 'completed' | 'skipped' | 'failed';
-  result?: string;
-}
-
-/** Plan — task summary with steps */
-export interface Plan {
-  id: string;
-  taskId: string;
-  title: string;
-  description: string;
-  steps: Step[];
-  status: 'draft' | 'active' | 'completed' | 'failed';
-  createdAt: string;
-}
-
 /** OAuth token data stored in tokens.json */
 export interface TokenData {
   type: 'oauth';
@@ -269,12 +235,6 @@ export type {
   SpawnConfig,
   AgentMessage,
 } from './agent.js';
-// Workflow System Types
-export type {
-  WorkflowDefinition,
-  WorkflowInput,
-  WorkflowResult,
-} from './workflow.js';
 // Error Types
 export { StorageError, NotFoundError, isNotFoundError, createNotFoundError } from './errors.js';
 // Tool Context Types

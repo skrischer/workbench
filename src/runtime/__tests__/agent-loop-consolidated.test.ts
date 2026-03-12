@@ -461,17 +461,4 @@ describe('AgentLoop - Consolidated with Hooks', () => {
       expect(Object.keys(hooks).length).toBe(0);
     });
   });
-
-  describe('Test 8: Backward Compatibility with CoreAgentLoop', () => {
-    it('should support CoreAgentLoop as alias for AgentLoop', async () => {
-      const { CoreAgentLoop } = await import('../core-agent-loop.js');
-
-      const loop = new CoreAgentLoop(client, storage, registry, defaultConfig, eventBus);
-
-      const result = await loop.run('Test backward compatibility');
-
-      expect(result.status).toBe('completed');
-      expect(result.finalResponse).toBe('Test response');
-    });
-  });
 });

@@ -1,7 +1,7 @@
 // src/runtime/__tests__/input-validation.test.ts — Input Validation Integration Tests
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { CoreAgentLoop } from '../core-agent-loop.js';
+import { AgentLoop } from '../agent-loop.js';
 import type { Tool, ToolResult } from '../../types/index.js';
 import type { AnthropicClient } from '../../llm/anthropic-client.js';
 import type { SessionStorage } from '../../storage/session-storage.js';
@@ -114,7 +114,7 @@ class MockAnthropicClient {
 }
 
 describe('Input Validation Integration', () => {
-  let agentLoop: CoreAgentLoop;
+  let agentLoop: AgentLoop;
   let toolRegistry: MockToolRegistry;
 
   beforeEach(() => {
@@ -122,7 +122,7 @@ describe('Input Validation Integration', () => {
     const storage = new MockSessionStorage();
     const client = new MockAnthropicClient();
 
-    agentLoop = new CoreAgentLoop(
+    agentLoop = new AgentLoop(
       client as any,
       storage as any,
       toolRegistry as any,

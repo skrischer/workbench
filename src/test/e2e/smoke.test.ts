@@ -80,8 +80,8 @@ describe('E2E Smoke Test', () => {
       expect(result.exitCode).toBe(0);
       expect(result.timedOut).toBe(false);
       expect(result.stdout).toContain('run');
-      expect(result.stdout).toContain('plan');
-      expect(result.stdout).toContain('dashboard');
+      expect(result.stdout).toContain('auth');
+      expect(result.stdout).toContain('config');
     });
 
     it('workbench run --help should show run options', async () => {
