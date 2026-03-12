@@ -187,7 +187,7 @@ export interface RunResult {
   steps: number;
   finalResponse: string;
   tokenUsage: LLMUsage;
-  status: 'completed' | 'max_steps_reached' | 'failed';
+  status: 'completed' | 'max_steps_reached' | 'failed' | 'cancelled';
 }
 
 /** Input for session summarization */
