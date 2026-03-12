@@ -21,6 +21,7 @@ import type { AnthropicClient } from '../llm/anthropic-client.js';
 import type { SessionStorage } from '../storage/session-storage.js';
 import type { ToolRegistry } from '../tools/registry.js';
 import type { TypedEventBus } from '../events/event-bus.js';
+import type { StreamDelta } from '../llm/streaming.js';
 import { validateToolInput } from '../tools/validator.js';
 import { PermissionGuard, PermissionError } from '../tools/permissions.js';
 
@@ -383,6 +384,253 @@ export class AgentLoop {
       return result;
     } finally {
       // Clean up AbortController
+      this.activeControllers.delete(runId);
+    }
+  }
+
+  /**
+   * Run the agent with streaming LLM responses.
+   * Emits llm:stream:delta events for each text token.
+   *
+   * @param prompt - User input to process
+   * @param sessionId - Optional existing session ID to resume
+   * @returns RunResult
+   */
+  async runStreaming(prompt: string, sessionId?: string): Promise<RunResult> {
+    // 1. Create or load session
+    let session: Session;
+    if (sessionId) {
+      session = await this.sessionStorage.load(sessionId);
+    } else {
+      session = await this.sessionStorage.create(this.agentId);
+    }
+    const runId = session.id;
+
+    // Create AbortController for this run
+    const abortController = new AbortController();
+    this.activeControllers.set(runId, abortController);
+
+    // Emit run:start event
+    this.eventBus?.emit('run:start', {
+      runId,
+      agentConfig: this.config,
+      prompt,
+    });
+
+    // Add initial user message
+    const userMessage: UserMessage = {
+      role: 'user',
+      content: prompt,
+      timestamp: new Date().toISOString(),
+    };
+    await this.sessionStorage.addMessage(session.id, userMessage);
+
+    let step = 0;
+    let status: RunResult['status'] = 'completed';
+    let totalUsage: LLMUsage = { input_tokens: 0, output_tokens: 0 };
+    let finalResponse = '';
+
+    try {
+      if (this.hooks?.onBeforeRun) {
+        const currentSession = await this.sessionStorage.load(session.id);
+        await this.hooks.onBeforeRun(currentSession);
+      }
+
+      while (step < this.config.maxSteps) {
+        step++;
+
+        const currentSession = await this.sessionStorage.load(session.id);
+        const llmMessages = this.convertToLLMMessages(currentSession.messages);
+        const tools = this.getToolDefinitions();
+
+        this.eventBus?.emit('llm:request', {
+          runId,
+          model: this.config.model ?? 'unknown',
+          messageCount: llmMessages.length,
+        });
+
+        // Use streaming API
+        const stream = await this.anthropicClient.sendMessageStream(
+          llmMessages,
+          tools.length > 0 ? tools : undefined,
+          { system: this.config.systemPrompt, signal: abortController.signal }
+        );
+
+        // Collect response from stream
+        let textContent = '';
+        const toolUseBlocks: ToolUseBlock[] = [];
+        let currentToolId = '';
+        let currentToolName = '';
+        let currentToolInput = '';
+
+        for await (const delta of stream) {
+          if (delta.type === 'text_delta' && delta.text) {
+            textContent += delta.text;
+            this.eventBus?.emit('llm:stream:delta', { runId, text: delta.text });
+          } else if (delta.type === 'tool_use_start' && delta.toolName && delta.toolId) {
+            currentToolId = delta.toolId;
+            currentToolName = delta.toolName;
+            currentToolInput = '';
+            this.eventBus?.emit('llm:stream:tool_start', {
+              runId,
+              toolName: delta.toolName,
+              toolId: delta.toolId,
+            });
+          } else if (delta.type === 'tool_input_delta' && delta.inputDelta) {
+            currentToolInput += delta.inputDelta;
+            this.eventBus?.emit('llm:stream:tool_input', {
+              runId,
+              toolId: currentToolId,
+              inputDelta: delta.inputDelta,
+            });
+          } else if (delta.type === 'content_block_stop') {
+            if (currentToolId && currentToolName) {
+              let parsedInput: Record<string, unknown> = {};
+              try {
+                parsedInput = JSON.parse(currentToolInput) as Record<string, unknown>;
+              } catch {
+                // Keep empty if unparseable
+              }
+              toolUseBlocks.push({
+                type: 'tool_use',
+                id: currentToolId,
+                name: currentToolName,
+                input: parsedInput,
+              });
+              currentToolId = '';
+              currentToolName = '';
+              currentToolInput = '';
+            }
+          } else if (delta.type === 'message_stop') {
+            this.eventBus?.emit('llm:stream:stop', { runId });
+          }
+        }
+
+        // Save assistant message
+        const assistantMessage: AssistantMessage = {
+          role: 'assistant',
+          content: textContent,
+          toolUses: toolUseBlocks.length > 0 ? toolUseBlocks : undefined,
+          timestamp: new Date().toISOString(),
+        };
+        await this.sessionStorage.addMessage(session.id, assistantMessage);
+
+        this.eventBus?.emit('run:step', {
+          runId,
+          stepIndex: step,
+          message: assistantMessage,
+        });
+
+        // No tool calls → done
+        if (toolUseBlocks.length === 0) {
+          status = 'completed';
+          finalResponse = textContent;
+          break;
+        }
+
+        // Execute tool calls
+        for (const toolUse of toolUseBlocks) {
+          this.eventBus?.emit('tool:call', {
+            runId,
+            toolName: toolUse.name,
+            input: toolUse.input,
+            stepIndex: step,
+          });
+
+          const startTime = performance.now();
+          const toolResult = await this.executeTool(toolUse, runId);
+          const durationMs = performance.now() - startTime;
+
+          this.eventBus?.emit('tool:result', {
+            runId,
+            toolName: toolUse.name,
+            result: {
+              success: !toolResult.is_error,
+              output: toolResult.content,
+              error: toolResult.is_error ? toolResult.content : undefined,
+            },
+            durationMs,
+          });
+
+          const toolResultMessage: ToolResultMessage = {
+            role: 'tool_result',
+            content: toolResult.content,
+            toolCallId: toolResult.tool_use_id,
+            timestamp: new Date().toISOString(),
+          };
+          await this.sessionStorage.addMessage(session.id, toolResultMessage);
+
+          if (this.hooks?.onAfterStep && !toolResult.is_error) {
+            const stepResult: ToolResult = {
+              success: !toolResult.is_error,
+              output: toolResult.content,
+              error: toolResult.is_error ? toolResult.content : undefined,
+            };
+            await this.hooks.onAfterStep(stepResult, {
+              runId,
+              stepIndex: step,
+              toolName: toolUse.name,
+            });
+          }
+        }
+
+        await this.sessionStorage.save(await this.sessionStorage.load(session.id));
+
+        if (step >= this.config.maxSteps) {
+          status = 'max_steps_reached';
+          finalResponse = textContent || 'Max steps reached without completion';
+          break;
+        }
+      }
+
+      await this.sessionStorage.save(await this.sessionStorage.load(session.id));
+
+      const result: RunResult = {
+        sessionId: session.id,
+        steps: step,
+        finalResponse,
+        tokenUsage: totalUsage,
+        status,
+      };
+
+      if (this.hooks?.onAfterRun) {
+        await this.hooks.onAfterRun(result, { runId });
+      }
+
+      this.eventBus?.emit('run:end', {
+        runId,
+        result: finalResponse,
+        tokenUsage: {
+          inputTokens: totalUsage.input_tokens,
+          outputTokens: totalUsage.output_tokens,
+          totalTokens: totalUsage.input_tokens + totalUsage.output_tokens,
+        },
+      });
+
+      return result;
+    } catch (error) {
+      if ((error as Record<string, unknown>).__isHookError) throw error;
+
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const result: RunResult = {
+        sessionId: session.id,
+        steps: step,
+        finalResponse: `Error: ${errorMessage}`,
+        tokenUsage: totalUsage,
+        status: 'failed',
+      };
+
+      if (this.hooks?.onAfterRun) {
+        try {
+          await this.hooks.onAfterRun(result, { runId });
+        } catch {
+          // Ignore hook errors on failure path
+        }
+      }
+
+      this.eventBus?.emit('run:error', { runId, error: errorMessage });
+      return result;
+    } finally {
       this.activeControllers.delete(runId);
     }
   }

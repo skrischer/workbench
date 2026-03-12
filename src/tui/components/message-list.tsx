@@ -1,7 +1,8 @@
-// src/tui/components/message-list.tsx — Scrollable message list
+// src/tui/components/message-list.tsx — Scrollable message list with markdown
 
 import React from 'react';
 import { Box, Text } from 'ink';
+import { Markdown } from './markdown.js';
 import type { ChatMessage } from '../types.js';
 
 const ROLE_COLORS = {
@@ -30,9 +31,13 @@ export function MessageList({ messages, streamingText }: MessageListProps): Reac
             {ROLE_LABELS[msg.role]}
             {msg.toolName ? ` [${msg.toolName}]` : ''}
           </Text>
-          <Text color={ROLE_COLORS[msg.role]} wrap="wrap">
-            {msg.content}
-          </Text>
+          {msg.role === 'assistant' ? (
+            <Markdown>{msg.content}</Markdown>
+          ) : (
+            <Text color={ROLE_COLORS[msg.role]} wrap="wrap">
+              {msg.content}
+            </Text>
+          )}
         </Box>
       ))}
       {streamingText ? (
