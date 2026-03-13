@@ -46,7 +46,7 @@ async function runViaGateway(prompt: string): Promise<void> {
   let inputTokens = 0;
   let outputTokens = 0;
 
-  const runDone = new Promise<void>((resolve) => {
+  const runDone = new Promise<void>((resolve, reject) => {
     client.onEvent((msg: WsEventMessage) => {
       switch (msg.event) {
         case 'llm:stream:delta': {
@@ -95,6 +95,11 @@ async function runViaGateway(prompt: string): Promise<void> {
         default:
           break;
       }
+    });
+
+    // Handle unexpected WebSocket disconnects so the promise doesn't hang forever
+    client.onClose(() => {
+      reject(new Error('Gateway connection lost during run'));
     });
   });
 

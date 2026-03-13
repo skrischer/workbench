@@ -35,6 +35,9 @@ export interface GatewayClient {
   /** Subscribe to all server messages (events + responses) */
   onMessage(handler: (msg: ServerMessage) => void): () => void;
 
+  /** Subscribe to WebSocket close events */
+  onClose(handler: (code: number, reason: string) => void): () => void;
+
   /** Close the WebSocket connection */
   close(): void;
 
@@ -61,6 +64,7 @@ export function connectToGateway(url?: string): Promise<GatewayClient> {
     const pending = new Map<string, PendingRequest>();
     const eventHandlers = new Set<(msg: WsEventMessage) => void>();
     const messageHandlers = new Set<(msg: ServerMessage) => void>();
+    const closeHandlers = new Set<(code: number, reason: string) => void>();
     let closed = false;
 
     ws.on('open', () => {
@@ -104,6 +108,11 @@ export function connectToGateway(url?: string): Promise<GatewayClient> {
         onMessage(handler: (msg: ServerMessage) => void): () => void {
           messageHandlers.add(handler);
           return () => { messageHandlers.delete(handler); };
+        },
+
+        onClose(handler: (code: number, reason: string) => void): () => void {
+          closeHandlers.add(handler);
+          return () => { closeHandlers.delete(handler); };
         },
 
         close(): void {
@@ -167,13 +176,18 @@ export function connectToGateway(url?: string): Promise<GatewayClient> {
       }
     });
 
-    ws.on('close', () => {
+    ws.on('close', (code: number, reason: Buffer) => {
       closed = true;
+      const reasonStr = reason.toString('utf-8');
       // Reject all pending requests
       for (const [id, p] of pending) {
         clearTimeout(p.timer);
         p.reject(new Error('WebSocket closed'));
         pending.delete(id);
+      }
+      // Notify close handlers
+      for (const handler of closeHandlers) {
+        handler(code, reasonStr);
       }
     });
   });

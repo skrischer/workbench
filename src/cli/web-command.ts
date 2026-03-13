@@ -6,7 +6,7 @@ export function createWebCommand(): Command {
   const cmd = new Command('web');
   cmd
     .description('[DEPRECATED] Start the Workbench Web UI server — use "workbench gateway" instead')
-    .option('--port <port>', 'Server port', parseInt, 4800)
+    .option('--port <port>', 'Server port', (v: string) => parseInt(v, 10), 4800)
     .option('--host <host>', 'Server host', '127.0.0.1')
     .option('--open', 'Open browser after start')
     .action(async (options: { port: number; host: string; open?: boolean }) => {

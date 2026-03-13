@@ -1,9 +1,9 @@
 // src/tui/app.tsx — Root TUI component (Gateway WebSocket client)
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
 import { theme } from './theme.js';
-import { TuiWsProvider, useTuiWs, type WsStatus } from './providers/ws-provider.js';
+import { TuiWsProvider, useTuiWs } from './providers/ws-provider.js';
 import { useWsDispatcher } from '../shared/ws-client/use-ws-dispatcher.js';
 import { chatStore, runStore, sessionStore } from './stores.js';
 import { RuntimeContext, type RuntimeState } from './context.js';
@@ -26,11 +26,11 @@ function AppInner(): React.ReactElement {
   const { exit } = useApp();
   const { status, lastMessage, sendCommand } = useTuiWs();
 
-  // Route WS events → Zustand stores
-  const stores = {
+  // Route WS events → Zustand stores (stable reference)
+  const stores = useMemo(() => ({
     chatStore: chatStore.getState(),
     runStore: runStore.getState(),
-  };
+  }), []);
   useWsDispatcher(lastMessage, stores);
 
   // UI state
@@ -266,7 +266,11 @@ function AppInner(): React.ReactElement {
   const activeToolCalls = [...streamingToolCallsMap.values()].map((tc) => ({
     toolId: tc.toolId,
     toolName: tc.toolName,
-    input: typeof tc.input === 'string' ? (tc.input ? JSON.parse(tc.input) as Record<string, unknown> : {}) : {},
+    input: (() => {
+      if (typeof tc.input !== 'string' || !tc.input) return {};
+      try { return JSON.parse(tc.input) as Record<string, unknown>; }
+      catch { return {}; }
+    })(),
     isRunning: tc.status === 'running',
     result: tc.result,
     isError: tc.status === 'error',
