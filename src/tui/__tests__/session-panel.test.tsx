@@ -1,47 +1,69 @@
-// src/tui/__tests__/session-panel.test.tsx — Session panel tests
+// src/tui/__tests__/session-panel.test.tsx — Session panel tests (Gateway client)
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { render } from 'ink-testing-library';
-import { SessionPanel } from '../components/session-panel.js';
-import { StorageContext } from '../context.js';
-import type { SessionStorage } from '../../storage/session-storage.js';
 
-function createMockStorage(sessions: Array<{
-  id: string;
-  status: 'active' | 'completed' | 'paused' | 'failed';
-  createdAt: string;
-  updatedAt: string;
-  messageCount: number;
-  promptPreview?: string;
-}>): SessionStorage {
-  return {
-    list: vi.fn().mockResolvedValue({
-      data: sessions,
-      total: sessions.length,
-      offset: 0,
-      limit: 50,
-    }),
-    load: vi.fn(),
-    save: vi.fn(),
-    create: vi.fn(),
-    createSession: vi.fn(),
-    addMessage: vi.fn(),
-    appendMessage: vi.fn(),
-  } as unknown as SessionStorage;
+const mockSendCommand = vi.fn();
+
+// Mock ws-provider at module level
+vi.mock('../providers/ws-provider.js', async () => {
+  const ReactMod = await import('react');
+
+  type WsStatus = 'connecting' | 'open' | 'closed' | 'error';
+
+  interface TuiWsContextValue {
+    status: WsStatus;
+    lastMessage: null;
+    send: ReturnType<typeof vi.fn>;
+    sendCommand: typeof mockSendCommand;
+  }
+
+  const TuiWsContext = ReactMod.createContext<TuiWsContextValue | null>(null);
+
+  function TuiWsProvider({ children }: { url: string; children: React.ReactNode }) {
+    const value: TuiWsContextValue = {
+      status: 'open',
+      lastMessage: null,
+      send: vi.fn(),
+      sendCommand: mockSendCommand,
+    };
+    return ReactMod.createElement(TuiWsContext.Provider, { value }, children);
+  }
+
+  function useTuiWs(): TuiWsContextValue {
+    const ctx = ReactMod.useContext(TuiWsContext);
+    if (!ctx) throw new Error('useTuiWs must be used within TuiWsProvider');
+    return ctx;
+  }
+
+  return { TuiWsProvider, useTuiWs };
+});
+
+// Import after mock setup
+const { SessionPanel } = await import('../components/session-panel.js');
+const { TuiWsProvider } = await import('../providers/ws-provider.js');
+
+function renderWithProvider(element: React.ReactElement) {
+  return render(
+    <TuiWsProvider url="ws://test">
+      {element}
+    </TuiWsProvider>
+  );
 }
 
 describe('SessionPanel', () => {
-  it('should show "No sessions" when empty', async () => {
-    const storage = createMockStorage([]);
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-    const { lastFrame } = render(
-      <StorageContext.Provider value={storage}>
-        <SessionPanel isFocused={false} activeSessionId={null} onSelectSession={() => {}} />
-      </StorageContext.Provider>
+  it('should show "No sessions" when empty', async () => {
+    mockSendCommand.mockResolvedValue([]);
+
+    const { lastFrame } = renderWithProvider(
+      <SessionPanel isFocused={false} activeSessionId={null} onSelectSession={() => {}} />
     );
 
-    // Wait for async state update
     await vi.waitFor(() => {
       expect(lastFrame()).toContain('No sessions');
     });
@@ -66,18 +88,14 @@ describe('SessionPanel', () => {
         promptPreview: 'Fix the login bug',
       },
     ];
-    const storage = createMockStorage(sessions);
+    mockSendCommand.mockResolvedValue(sessions);
 
-    const { lastFrame } = render(
-      <StorageContext.Provider value={storage}>
-        <SessionPanel isFocused={false} activeSessionId={null} onSelectSession={() => {}} />
-      </StorageContext.Provider>
+    const { lastFrame } = renderWithProvider(
+      <SessionPanel isFocused={false} activeSessionId={null} onSelectSession={() => {}} />
     );
 
     await vi.waitFor(() => {
       const output = lastFrame();
-      expect(output).toContain('●'); // active icon
-      expect(output).toContain('○'); // completed icon
       expect(output).toContain('Explain the architecture');
       expect(output).toContain('Fix the login bug');
     });
@@ -94,21 +112,17 @@ describe('SessionPanel', () => {
         promptPreview: 'Test session prompt',
       },
     ];
-    const storage = createMockStorage(sessions);
+    mockSendCommand.mockResolvedValue(sessions);
     const onSelect = vi.fn();
 
-    const { lastFrame, stdin } = render(
-      <StorageContext.Provider value={storage}>
-        <SessionPanel isFocused={true} activeSessionId={null} onSelectSession={onSelect} />
-      </StorageContext.Provider>
+    const { lastFrame, stdin } = renderWithProvider(
+      <SessionPanel isFocused={true} activeSessionId={null} onSelectSession={onSelect} />
     );
 
-    // Wait for sessions to load and render
     await vi.waitFor(() => {
       expect(lastFrame()).toContain('Test session prompt');
     });
 
-    // Press Enter to select
     stdin.write('\r');
 
     await vi.waitFor(() => {

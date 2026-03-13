@@ -9,14 +9,23 @@ import { homedir } from 'node:os';
 import type { FastifyInstance } from 'fastify';
 import { TypedEventBus } from '../events/event-bus.js';
 import { SessionStorage } from '../storage/session-storage.js';
-import { ToolRegistry } from '../tools/registry.js';
 import { AgentLoop } from '../runtime/agent-loop.js';
+import type { AgentLoopHooks } from '../runtime/agent-loop.js';
 import { AnthropicClient } from '../llm/anthropic-client.js';
 import { TokenRefresher } from '../llm/token-refresh.js';
 import { TokenStorage } from '../llm/token-storage.js';
 import { loadAgentConfig } from '../agent/config.js';
+import { createDefaultTools } from '../tools/defaults.js';
+import { RunLogger } from '../storage/run-logger.js';
+import { LanceDBMemoryStore } from '../memory/lancedb-store.js';
+import { createAutoMemoryHook } from '../memory/auto-memory.js';
+import { loadUserConfig } from '../config/user-config.js';
+import { AgentRegistry } from '../multi-agent/agent-registry.js';
+import { MessageBus } from '../multi-agent/message-bus.js';
+import { AgentOrchestrator } from '../multi-agent/orchestrator.js';
 import { createWsBridge } from '../server/ws-bridge.js';
 import type { WsBridge } from '../server/ws-bridge.js';
+import type { AgentConfig, ToolResult, Session, RunResult } from '../types/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '../..');
@@ -30,11 +39,13 @@ export interface GatewayOptions {
 export interface Gateway {
   app: FastifyInstance;
   bridge: WsBridge;
+  agentLoop: AgentLoop;
+  eventBus: TypedEventBus;
   close: () => Promise<void>;
 }
 
 export async function createGateway(options: GatewayOptions = {}): Promise<Gateway> {
-  const { host = '127.0.0.1', port = 3000, dev = false } = options;
+  const { host = '127.0.0.1', port = 4800, dev = false } = options;
 
   // Initialize dependencies
   const workbenchHome = process.env.WORKBENCH_HOME ?? path.join(homedir(), '.workbench');
@@ -44,18 +55,70 @@ export async function createGateway(options: GatewayOptions = {}): Promise<Gatew
 
   const eventBus = new TypedEventBus();
   const sessionStorage = new SessionStorage(undefined, eventBus);
-  const toolRegistry = new ToolRegistry();
+
+  // Multi-agent infrastructure
+  const agentRegistry = new AgentRegistry();
+  const messageBus = new MessageBus();
+
+  // Tool registry with all default tools (including memory + multi-agent tools)
+  const memoryStore = new LanceDBMemoryStore({
+    dbPath: path.join(workbenchHome, 'memory'),
+  });
+  const toolRegistry = createDefaultTools({ agentRegistry, messageBus, memoryStore });
+
   const agentConfig = await loadAgentConfig();
+  if (!agentConfig.tools || agentConfig.tools.length === 0) {
+    agentConfig.tools = toolRegistry.list();
+  }
+
   const anthropicClient = new AnthropicClient(tokenRefresher, {
     model: agentConfig.model,
     apiUrl: process.env.ANTHROPIC_API_URL,
   });
+
+  const orchestrator = new AgentOrchestrator(
+    agentRegistry, messageBus, anthropicClient, sessionStorage, toolRegistry
+  );
+
+  // RunLogger + AutoMemory hooks (analog to run-command.ts)
+  const runLogger = new RunLogger(workbenchHome);
+  const userConfig = await loadUserConfig();
+  const autoMemoryHook = createAutoMemoryHook({
+    sessionStorage, runLogger, memoryStore, userConfig,
+  });
+
+  const hooks: AgentLoopHooks = {
+    onBeforeRun: async (session: Session) => {
+      runLogger.startRun(session.id, '');
+    },
+    onAfterStep: async (result: ToolResult, context: { runId: string; stepIndex: number; toolName: string }) => {
+      runLogger.logToolCall(context.runId, {
+        toolName: context.toolName, input: {}, output: result.output, durationMs: 0,
+      }, context.stepIndex);
+    },
+    onAfterRun: async (result: RunResult, context: { runId: string }) => {
+      const status: 'completed' | 'failed' | 'cancelled' =
+        result.status === 'failed' ? 'failed' : 'completed';
+      const tokenUsage = {
+        inputTokens: result.tokenUsage.input_tokens,
+        outputTokens: result.tokenUsage.output_tokens,
+        totalTokens: result.tokenUsage.input_tokens + result.tokenUsage.output_tokens,
+      };
+      await runLogger.endRun(context.runId, status, tokenUsage);
+      if (autoMemoryHook) await autoMemoryHook(result, context);
+    },
+  };
+
   const agentLoop = new AgentLoop(
     anthropicClient,
     sessionStorage,
     toolRegistry,
     agentConfig,
     eventBus,
+    hooks,
+    undefined,
+    agentRegistry,
+    orchestrator,
   );
 
   // Create Fastify instance
@@ -91,8 +154,14 @@ export async function createGateway(options: GatewayOptions = {}): Promise<Gatew
     });
     viteServer = server;
 
-    // Use Vite's connect middleware
-    app.use(server.middlewares);
+    // Use Vite's connect middleware — skip API/WS routes so Fastify handles them
+    app.use((req: { url?: string }, _res: unknown, next: () => void) => {
+      if (req.url === '/ws' || req.url === '/health') {
+        next();
+        return;
+      }
+      (server.middlewares as { handle: (req: unknown, res: unknown, next: () => void) => void }).handle(req, _res, next);
+    });
 
     // SPA fallback via Vite (transforms index.html with HMR injection)
     app.setNotFoundHandler(async (req, reply) => {
@@ -134,5 +203,5 @@ export async function createGateway(options: GatewayOptions = {}): Promise<Gatew
     await app.close();
   };
 
-  return { app, bridge, close };
+  return { app, bridge, agentLoop, eventBus, close };
 }

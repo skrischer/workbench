@@ -4,7 +4,7 @@ import { createGateway } from './index.js';
 const args = process.argv.slice(2);
 const dev = args.includes('--dev');
 const portIdx = args.indexOf('--port');
-const port = portIdx !== -1 ? Number(args[portIdx + 1]) : 3000;
+const port = portIdx !== -1 ? Number(args[portIdx + 1]) : 4800;
 const hostIdx = args.indexOf('--host');
 const host = hostIdx !== -1 ? args[hostIdx + 1] ?? '127.0.0.1' : '127.0.0.1';
 

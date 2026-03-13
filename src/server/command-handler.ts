@@ -94,14 +94,11 @@ async function executeCommand(
       });
       // Simple client-side filter for now — later replace with full-text search
       if (query) {
-        return {
-          ...result,
-          data: result.data.filter(
-            (s) => s.id.includes(query) || s.agentId.includes(query),
-          ),
-        };
+        return result.data.filter(
+          (s) => s.id.includes(query) || s.agentId.includes(query),
+        );
       }
-      return result;
+      return result.data;
     }
 
     default:

@@ -9,22 +9,26 @@ import { fallbackHandler } from './fallback-handler.js';
  */
 function parseRateLimitHeaders(headers: Headers | undefined): RateLimitInfo | undefined {
   if (!headers || typeof headers.get !== 'function') return undefined;
-  const fiveHourUtil = headers.get('anthropic-ratelimit-unified-five-hour-token-utilization');
+  const fiveHourUtil = headers.get('anthropic-ratelimit-unified-5h-utilization');
   if (fiveHourUtil === null) return undefined;
 
   return {
     fiveHourUtilization: parseFloat(fiveHourUtil) || 0,
-    fiveHourReset: parseResetTimestamp(headers.get('anthropic-ratelimit-unified-five-hour-token-reset')),
-    fiveHourStatus: headers.get('anthropic-ratelimit-unified-five-hour-token-status') ?? 'allowed',
-    sevenDayUtilization: parseFloat(headers.get('anthropic-ratelimit-unified-seven-day-token-utilization') ?? '0') || 0,
-    sevenDayReset: parseResetTimestamp(headers.get('anthropic-ratelimit-unified-seven-day-token-reset')),
-    sevenDayStatus: headers.get('anthropic-ratelimit-unified-seven-day-token-status') ?? 'allowed',
+    fiveHourReset: parseResetUnix(headers.get('anthropic-ratelimit-unified-5h-reset')),
+    fiveHourStatus: headers.get('anthropic-ratelimit-unified-5h-status') ?? 'allowed',
+    sevenDayUtilization: parseFloat(headers.get('anthropic-ratelimit-unified-7d-utilization') ?? '0') || 0,
+    sevenDayReset: parseResetUnix(headers.get('anthropic-ratelimit-unified-7d-reset')),
+    sevenDayStatus: headers.get('anthropic-ratelimit-unified-7d-status') ?? 'allowed',
   };
 }
 
-/** Parse an ISO 8601 timestamp to Unix seconds, or return 0 */
-function parseResetTimestamp(value: string | null): number {
+/** Parse reset value (Unix seconds or ISO 8601) to Unix seconds, or return 0 */
+function parseResetUnix(value: string | null): number {
   if (!value) return 0;
+  // Try as plain number (Unix seconds) first
+  const num = Number(value);
+  if (!Number.isNaN(num) && num > 0) return Math.floor(num);
+  // Fallback: ISO 8601 timestamp
   const ms = Date.parse(value);
   return Number.isNaN(ms) ? 0 : Math.floor(ms / 1000);
 }

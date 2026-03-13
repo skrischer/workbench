@@ -1,8 +1,8 @@
-// src/tui/components/session-panel.tsx — Session list panel
+// src/tui/components/session-panel.tsx — Session list panel (Gateway client)
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { useStorageContext } from '../context.js';
+import { useTuiWs } from '../providers/ws-provider.js';
 import { theme, statusColors } from '../theme.js';
 import type { SessionPreview } from '../types.js';
 import type { SessionStatus } from '../../types/index.js';
@@ -21,15 +21,16 @@ export interface SessionPanelProps {
 }
 
 export function SessionPanel({ isFocused, activeSessionId, onSelectSession }: SessionPanelProps): React.ReactElement {
-  const storage = useStorageContext();
+  const { sendCommand, status } = useTuiWs();
   const [sessions, setSessions] = useState<SessionPreview[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  // Load sessions
+  // Load sessions via Gateway
   const loadSessions = useCallback(async () => {
+    if (status !== 'open') return;
     try {
-      const result = await storage.list({ sort: 'desc', limit: 50 });
-      const previews: SessionPreview[] = result.data.map((s) => ({
+      const result = await sendCommand('list_sessions') as SessionPreview[];
+      const previews: SessionPreview[] = result.map((s) => ({
         id: s.id,
         status: s.status,
         createdAt: s.createdAt,
@@ -41,11 +42,10 @@ export function SessionPanel({ isFocused, activeSessionId, onSelectSession }: Se
     } catch {
       // Ignore load errors silently
     }
-  }, [storage]);
+  }, [sendCommand, status]);
 
   useEffect(() => {
     void loadSessions();
-    // Reload periodically
     const interval = setInterval(() => void loadSessions(), 5000);
     return () => clearInterval(interval);
   }, [loadSessions]);

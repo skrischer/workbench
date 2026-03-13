@@ -6,7 +6,7 @@ export function createGatewayCommand(): Command {
   cmd
     .description('Start the Workbench Gateway (unified API + Web UI server)')
     .option('--dev', 'Enable Vite dev server with HMR')
-    .option('--port <port>', 'Server port', parseInt, 3000)
+    .option('--port <port>', 'Server port', (v: string) => parseInt(v, 10), 4800)
     .option('--host <host>', 'Server host', '127.0.0.1')
     .action(async (options: { dev?: boolean; port: number; host: string }) => {
       const { createGateway } = await import('../gateway/index.js');
