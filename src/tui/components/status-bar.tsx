@@ -1,23 +1,18 @@
-// src/tui/components/status-bar.tsx — Bottom status bar with usage bars
+// src/tui/components/status-bar.tsx — Bottom status bar with usage bars (Gateway client)
 
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../theme.js';
-import type { TypedEventBus } from '../../events/event-bus.js';
-import type { RateLimitInfo } from '../../types/events.js';
+import { runStore } from '../stores.js';
 import { getContextWindowSize } from '../../config/index.js';
 
 export interface StatusBarProps {
-  eventBus: TypedEventBus;
   isRunning: boolean;
-  model?: string;
 }
 
 /** Shorten full model ID to display name: "claude-sonnet-4-20250514" → "sonnet-4" */
 export function shortModelName(model: string): string {
-  // Strip "claude-" prefix
   let name = model.replace(/^claude-/, '');
-  // Strip date suffix (-YYYYMMDD)
   name = name.replace(/-\d{8}$/, '');
   return name;
 }
@@ -33,33 +28,6 @@ export function formatTokenCount(tokens: number): string {
     return k >= 10 ? `${Math.round(k)}k` : `${k.toFixed(1)}k`;
   }
   return String(tokens);
-}
-
-/** Format reset timestamp to human-readable relative/absolute time */
-export function formatResetTime(resetUnix: number): string {
-  if (resetUnix === 0) return '';
-  const now = Math.floor(Date.now() / 1000);
-  const diffSec = resetUnix - now;
-
-  if (diffSec <= 0) return 'now';
-
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHour = Math.floor(diffMin / 60);
-
-  // Under 2 hours: show relative "~Xh" or "~Xm"
-  if (diffHour < 2) {
-    if (diffMin < 60) return `~${diffMin}m`;
-    const remainMin = diffMin % 60;
-    return remainMin > 0 ? `~${diffHour}h${remainMin}m` : `~${diffHour}h`;
-  }
-
-  // Over 2 hours: show weekday + time (e.g. "Mo 08:00")
-  const resetDate = new Date(resetUnix * 1000);
-  const days = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
-  const day = days[resetDate.getDay()];
-  const hours = String(resetDate.getHours()).padStart(2, '0');
-  const mins = String(resetDate.getMinutes()).padStart(2, '0');
-  return `${day} ${hours}:${mins}`;
 }
 
 /** Render a usage bar: [████░░░░░░] with color thresholds */
@@ -81,73 +49,43 @@ export function UsageBar({ ratio, width = 10 }: { ratio: number; width?: number 
   return <Text color={color}>[{bar}]</Text>;
 }
 
-export function StatusBar({ eventBus, isRunning, model }: StatusBarProps): React.ReactElement {
-  const [latestInputTokens, setLatestInputTokens] = useState(0);
-  const [currentModel, setCurrentModel] = useState(model ?? '');
-  const [rateLimit, setRateLimit] = useState<RateLimitInfo | null>(null);
+export function StatusBar({ isRunning }: StatusBarProps): React.ReactElement {
+  const [model, setModel] = useState('');
+  const [inputTokens, setInputTokens] = useState(0);
+  const [stepCount, setStepCount] = useState(0);
 
+  // Subscribe to runStore for model, tokens, steps
   useEffect(() => {
-    const unsubs = [
-      eventBus.on('llm:response', ({ model: m, tokenUsage, rateLimit: rl }) => {
-        setCurrentModel(m);
-        // Use latest (not cumulative) input tokens — reflects current context size
-        setLatestInputTokens(tokenUsage.inputTokens);
-        if (rl) {
-          setRateLimit(rl);
-        }
-      }),
-      eventBus.on('run:start', () => {
-        setLatestInputTokens(0);
-      }),
-    ];
+    const unsub = runStore.subscribe((state) => {
+      setModel(state.model);
+      setInputTokens(state.tokenUsage.input);
+      setStepCount(state.stepCount);
+    });
+    return unsub;
+  }, []);
 
-    return () => {
-      for (const unsub of unsubs) unsub();
-    };
-  }, [eventBus]);
-
-  const resolvedModel = currentModel || model || '';
-  const displayModel = resolvedModel ? shortModelName(resolvedModel) : '';
-  const contextMax = resolvedModel ? getContextWindowSize(resolvedModel) : undefined;
-  const contextRatio = contextMax ? latestInputTokens / contextMax : 0;
-
-  const fiveHourPct = rateLimit ? Math.round(rateLimit.fiveHourUtilization * 100) : 0;
-  const sevenDayPct = rateLimit ? Math.round(rateLimit.sevenDayUtilization * 100) : 0;
+  const displayModel = model ? shortModelName(model) : '';
+  const contextMax = model ? getContextWindowSize(model) : undefined;
+  const contextRatio = contextMax ? inputTokens / contextMax : 0;
 
   return (
     <Box borderStyle="single" borderColor={theme.border} paddingX={1} justifyContent="space-between">
       <Box gap={1}>
         {displayModel ? <Text bold color={theme.foregroundSecondary}>{displayModel}</Text> : null}
-        {displayModel ? <Text dimColor>│</Text> : null}
+        {displayModel ? <Text dimColor>|</Text> : null}
 
         {/* Context window bar */}
         {contextMax ? (
           <>
             <Text dimColor>ctx </Text>
             <UsageBar ratio={contextRatio} />
-            <Text dimColor> {formatTokenCount(latestInputTokens)}/{formatTokenCount(contextMax)}</Text>
+            <Text dimColor> {formatTokenCount(inputTokens)}/{formatTokenCount(contextMax)}</Text>
           </>
         ) : (
-          latestInputTokens > 0 && <Text dimColor>ctx {formatTokenCount(latestInputTokens)}</Text>
+          inputTokens > 0 && <Text dimColor>ctx {formatTokenCount(inputTokens)}</Text>
         )}
 
-        {/* Rate limit bars */}
-        {rateLimit ? (
-          <>
-            <Text dimColor> │ 5h </Text>
-            <UsageBar ratio={rateLimit.fiveHourUtilization} />
-            <Text dimColor> {fiveHourPct}%</Text>
-            {rateLimit.fiveHourReset > 0 && (
-              <Text dimColor> {formatResetTime(rateLimit.fiveHourReset)}</Text>
-            )}
-            <Text dimColor> │ 7d </Text>
-            <UsageBar ratio={rateLimit.sevenDayUtilization} />
-            <Text dimColor> {sevenDayPct}%</Text>
-            {rateLimit.sevenDayReset > 0 && (
-              <Text dimColor> {formatResetTime(rateLimit.sevenDayReset)}</Text>
-            )}
-          </>
-        ) : null}
+        {stepCount > 0 && <Text dimColor> steps: {stepCount}</Text>}
 
         {isRunning && <Text color={theme.warning}> Running</Text>}
       </Box>

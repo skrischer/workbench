@@ -1,6 +1,6 @@
 // src/gateway/__tests__/gateway.test.ts — Gateway Unit Tests
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { Gateway } from '../index.js';
 
 // Mock all heavy dependencies so we can test Gateway in isolation
@@ -32,11 +32,14 @@ vi.mock('../../storage/session-storage.js', () => ({
   })),
 }));
 
-vi.mock('../../tools/registry.js', () => ({
-  ToolRegistry: vi.fn().mockImplementation(() => ({
-    getAll: vi.fn().mockReturnValue([]),
+vi.mock('../../tools/defaults.js', () => ({
+  createDefaultTools: vi.fn().mockReturnValue({
+    list: vi.fn().mockReturnValue(['read_file', 'write_file', 'exec']),
     get: vi.fn(),
-  })),
+    has: vi.fn(),
+    register: vi.fn(),
+    registerAlias: vi.fn(),
+  }),
 }));
 
 vi.mock('../../runtime/agent-loop.js', () => ({
@@ -67,6 +70,48 @@ vi.mock('../../server/ws-bridge.js', () => ({
   }),
 }));
 
+vi.mock('../../storage/run-logger.js', () => ({
+  RunLogger: vi.fn().mockImplementation(() => ({
+    startRun: vi.fn(),
+    logToolCall: vi.fn(),
+    endRun: vi.fn().mockResolvedValue(undefined),
+    loadRun: vi.fn().mockResolvedValue(null),
+  })),
+}));
+
+vi.mock('../../memory/lancedb-store.js', () => ({
+  LanceDBMemoryStore: vi.fn().mockImplementation(() => ({
+    init: vi.fn().mockResolvedValue(undefined),
+    add: vi.fn().mockResolvedValue({ id: 'mem-1' }),
+    search: vi.fn().mockResolvedValue([]),
+  })),
+}));
+
+vi.mock('../../memory/auto-memory.js', () => ({
+  createAutoMemoryHook: vi.fn().mockReturnValue(vi.fn()),
+}));
+
+vi.mock('../../config/user-config.js', () => ({
+  loadUserConfig: vi.fn().mockResolvedValue({
+    autoSummarize: true,
+    summarizerModel: 'test',
+    memoryRetentionDays: 90,
+    minMessagesForSummary: 3,
+  }),
+}));
+
+vi.mock('../../multi-agent/agent-registry.js', () => ({
+  AgentRegistry: vi.fn().mockImplementation(() => ({})),
+}));
+
+vi.mock('../../multi-agent/message-bus.js', () => ({
+  MessageBus: vi.fn().mockImplementation(() => ({})),
+}));
+
+vi.mock('../../multi-agent/orchestrator.js', () => ({
+  AgentOrchestrator: vi.fn().mockImplementation(() => ({})),
+}));
+
 // Use dynamic import so mocks are applied before module loads
 const { createGateway } = await import('../index.js');
 
@@ -93,6 +138,8 @@ describe('createGateway', () => {
     expect(gateway).toBeDefined();
     expect(gateway.app).toBeDefined();
     expect(gateway.bridge).toBeDefined();
+    expect(gateway.agentLoop).toBeDefined();
+    expect(gateway.eventBus).toBeDefined();
     expect(typeof gateway.close).toBe('function');
   });
 

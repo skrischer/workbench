@@ -83,6 +83,9 @@ export async function createTestEnv(options: TestEnvOptions = {}): Promise<TestE
   // Build env vars
   const env: Record<string, string> = {
     WORKBENCH_HOME: workbenchHome,
+    // Point gateway URL to unreachable address so E2E tests use local fallback
+    // instead of connecting to a running gateway on the default port
+    WORKBENCH_GATEWAY_URL: 'ws://127.0.0.1:1/ws',
   };
   if (options.anthropicApiUrl) {
     env.ANTHROPIC_API_URL = options.anthropicApiUrl;

@@ -95,9 +95,19 @@ if (hasSubcommand || !process.stdout.isTTY) {
   // Commander.js handles the subcommand or non-interactive mode
   program.parse();
 } else {
-  // Interactive TUI mode
+  // Interactive TUI mode — connects to Gateway via WebSocket
   const startTUI = async (): Promise<void> => {
     await ensureAuth();
+
+    // Check if Gateway is reachable
+    const { isGatewayReachable, getGatewayHttpUrl } = await import('../gateway/health.js');
+    const reachable = await isGatewayReachable();
+    if (!reachable) {
+      console.error(`Gateway nicht erreichbar unter ${getGatewayHttpUrl()}`);
+      console.error('Starte den Gateway zuerst: workbench gateway');
+      process.exit(1);
+    }
+
     const { render } = await import('ink');
     const React = await import('react');
     const { App } = await import('./app.js');

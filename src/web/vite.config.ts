@@ -22,7 +22,7 @@ export default defineConfig({
     allowedHosts: ['srv1364794.tiffany-kelvin.ts.net'],
     proxy: {
       '/ws': {
-        target: 'ws://127.0.0.1:3000',
+        target: 'ws://127.0.0.1:4800',
         ws: true,
       },
     },

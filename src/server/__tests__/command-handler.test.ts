@@ -214,9 +214,9 @@ describe('handleCommand', () => {
         type: 'response',
         requestId: 'req-7',
       });
-      const data = response.data as { data: Array<{ id: string }> };
-      expect(data.data).toHaveLength(1);
-      expect(data.data[0].id).toBe('session-abc');
+      const data = response.data as Array<{ id: string }>;
+      expect(data).toHaveLength(1);
+      expect(data[0].id).toBe('session-abc');
     });
 
     it('returns all sessions when query is empty', async () => {
@@ -236,8 +236,8 @@ describe('handleCommand', () => {
       );
 
       const response = parseSentMessage(socket);
-      const data = response.data as { data: Array<{ id: string }> };
-      expect(data.data).toHaveLength(1);
+      const data = response.data as Array<{ id: string }>;
+      expect(data).toHaveLength(1);
     });
 
     it('uses custom limit when provided', async () => {
@@ -270,9 +270,9 @@ describe('handleCommand', () => {
       );
 
       const response = parseSentMessage(socket);
-      const data = response.data as { data: Array<{ agentId: string }> };
-      expect(data.data).toHaveLength(1);
-      expect(data.data[0].agentId).toBe('coder');
+      const data = response.data as Array<{ agentId: string }>;
+      expect(data).toHaveLength(1);
+      expect(data[0].agentId).toBe('coder');
     });
   });
 

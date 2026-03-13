@@ -86,12 +86,14 @@ function InlineToolCallBlock({ message }: { message: ChatMessage }) {
 
 // === Message List ===
 
+const EMPTY_MESSAGES: ChatMessage[] = [];
+
 interface MessageListProps {
   sessionId: string;
 }
 
 export function MessageList({ sessionId }: MessageListProps) {
-  const messages = useChatStore((s) => s.messages.get(sessionId) ?? []);
+  const messages = useChatStore((s) => s.messages.get(sessionId) ?? EMPTY_MESSAGES);
   const streamingText = useChatStore((s) => s.streamingText);
   const streamingToolCalls = useChatStore((s) => s.streamingToolCalls);
   const isRunning = useRunStore((s) => s.isRunning);
