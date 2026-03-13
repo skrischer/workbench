@@ -36,6 +36,8 @@ npm run test:e2e
 
 **Definition of Done (DoD):** All four must pass: `npx tsc --noEmit`, `npm run build`, `npm test`, `npm run test:e2e`
 
+**CI/CD:** DoD runs automatically via GitHub Actions (`.github/workflows/ci.yml`) on push and PRs against `develop`. Do NOT run `npm test` or `npm run test:e2e` locally — push and let CI validate. Use `gh run watch` to monitor. Quick local checks (`npx tsc --noEmit`, `npm run build`) are fine.
+
 ## Architecture
 
 ### Core Primitives
